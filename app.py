@@ -1339,7 +1339,7 @@ annualised_var = interp_var * np.sqrt(252 / days)
 tail_risk_label = "elevated" if es_var_ratio > 1.5 else "moderate" if es_var_ratio > 1.2 else "contained"
 
 # ── Interpretation — updates automatically per selected method ──────────────
-with st.expander("📖  INTERPRETATION", expanded=False):
+with st.expander("INTERPRETATION", expanded=False):
 
     _ann = f"~${annualised_var:,.0f}"
 
@@ -2235,7 +2235,7 @@ with comp_tab:
 
         st.markdown("<br>", unsafe_allow_html=True)
         with st.expander(
-            f"📋  AUTOMATED DIAGNOSTIC INSIGHTS  —  {lb_sel}Y LOOKBACK",
+            f"AUTOMATED DIAGNOSTIC INSIGHTS  —  {lb_sel}Y LOOKBACK",
             expanded=False,
         ):
             st.markdown(
@@ -2477,7 +2477,7 @@ with _dd_col_paths:
     st.plotly_chart(_path_fig, use_container_width=True)
 
 # ── Drawdown interpretation ───────────────────────────────────────────────────
-with st.expander("📉  DRAWDOWN INTERPRETATION", expanded=False):
+with st.expander("DRAWDOWN INTERPRETATION", expanded=False):
     _dd_ratio = _pct95_dd / hist_VaR if hist_VaR > 0 else 0
     _dd_severity = ("severe" if _dd_ratio > 3 else "moderate" if _dd_ratio > 1.5 else "contained")
     st.markdown(f'''
