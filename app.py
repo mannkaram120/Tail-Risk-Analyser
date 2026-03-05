@@ -7,26 +7,6 @@ from scipy.stats import norm, gaussian_kde
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os
-import requests
-import time
-
-# ── Cloud deployment fix (Render / Heroku / AWS etc.) ─────────────────────────
-# Yahoo Finance blocks requests from datacenter IPs unless a real browser
-# User-Agent is provided. Patch the yfinance session once at startup.
-try:
-    _yf_session = requests.Session()
-    _yf_session.headers.update({
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-    })
-    yf.set_config(session=_yf_session)
-except Exception:
-    pass  # silently fall back if yfinance version doesn't support set_config
 try:
     from dotenv import load_dotenv
     load_dotenv()  # loads .env file from project directory automatically
@@ -498,11 +478,22 @@ div[data-testid="stTabs"] [role="tablist"] {
     letter-spacing: 0.16em !important;
     color: #888 !important;
     text-transform: uppercase !important;
-    padding: 11px 18px !important;
+    padding: 11px 18px 11px 44px !important;
     background: #F5F2EB !important;
     border: 1px solid #D6D2CA !important;
     border-radius: 0 !important;
     transition: background 0.15s, color 0.15s !important;
+    list-style: none !important;
+}
+[data-testid="stMain"] [data-testid="stExpander"] details summary::-webkit-details-marker {
+    display: none !important;
+}
+[data-testid="stMain"] [data-testid="stExpander"] details summary svg {
+    position: absolute !important;
+    left: 14px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    flex-shrink: 0 !important;
 }
 [data-testid="stMain"] [data-testid="stExpander"] details[open] > summary {
     background: #EDEAE3 !important;
@@ -1041,16 +1032,8 @@ def load_market_data(tickers_tuple, lookback_years, days):
     startdate = enddate - dt.timedelta(days=365 * lookback_years)
     adj_close_df = pd.DataFrame()
     for ticker in tickers_tuple:
-        data = pd.DataFrame()
-        for _attempt in range(3):          # retry up to 3 times
-            try:
-                data = yf.download(ticker, start=startdate, end=enddate,
-                                   auto_adjust=False, progress=False)
-                if not data.empty:
-                    break
-            except Exception:
-                pass
-            time.sleep(1.5 * (_attempt + 1))   # back-off: 1.5s → 3s → 4.5s
+        data = yf.download(ticker, start=startdate, end=enddate,
+                           auto_adjust=False, progress=False)
         if data.empty:
             return None, f"Could not fetch data for {ticker}. Please check the ticker symbol."
         _col = data['Adj Close']
@@ -1487,19 +1470,8 @@ def compute_sensitivity_matrix(tickers_tuple, weights_tuple, portfolio_value,
     startdate = enddate - dt.timedelta(days=365 * max_lookback + 30)
     frames = {}
     for ticker in tickers_tuple:
-        data = pd.DataFrame()
-        for _attempt in range(3):
-            try:
-                data = yf.download(ticker, start=startdate, end=enddate,
-                                   auto_adjust=False, progress=False)
-                if not data.empty:
-                    break
-            except Exception:
-                pass
-            time.sleep(1.5 * (_attempt + 1))
-        if data.empty:
-            frames[ticker] = pd.Series(dtype=float)
-            continue
+        data = yf.download(ticker, start=startdate, end=enddate,
+                           auto_adjust=False, progress=False)
         col = data["Adj Close"]
         if isinstance(col, pd.DataFrame):
             col = col.iloc[:, 0]
