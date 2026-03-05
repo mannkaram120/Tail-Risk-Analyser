@@ -481,43 +481,31 @@ div[data-testid="stTabs"] [role="tablist"] {
 .info-box { background:#F9F7F3; border-left:2px solid #888; padding:12px 16px; font-size:0.75rem; color:#555; margin:12px 0; font-family:'Inter',sans-serif; line-height:1.7; }
 
 /* ── Collapsible Interpretation / Diagnostic expanders ───────────────────── */
-[data-testid="stMain"] [data-testid="stExpander"] details {
-    border: none !important;
-    background: transparent !important;
+[data-testid="stMain"] [data-testid="stExpander"] {
+    border: 1px solid #D6D2CA !important;
+    border-radius: 0 !important;
     margin-bottom: 4px !important;
+    background: #F5F2EB !important;
 }
-[data-testid="stMain"] [data-testid="stExpander"] details summary {
+[data-testid="stMain"] [data-testid="stExpander"] summary {
     font-family: 'Space Mono', monospace !important;
     font-size: 0.60rem !important;
     font-weight: 400 !important;
     letter-spacing: 0.16em !important;
     color: #888 !important;
     text-transform: uppercase !important;
-    padding: 11px 18px 11px 44px !important;
     background: #F5F2EB !important;
-    border: 1px solid #D6D2CA !important;
-    border-radius: 0 !important;
     transition: background 0.15s, color 0.15s !important;
-    list-style: none !important;
 }
-[data-testid="stMain"] [data-testid="stExpander"] details summary::-webkit-details-marker {
-    display: none !important;
+[data-testid="stMain"] [data-testid="stExpander"] summary:hover {
+    background: #EDEAE3 !important;
+    color: #1a1a1a !important;
 }
-[data-testid="stMain"] [data-testid="stExpander"] details summary svg {
-    position: absolute !important;
-    left: 14px !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
-    flex-shrink: 0 !important;
-}
+[data-testid="stMain"] [data-testid="stExpander"][open] summary,
 [data-testid="stMain"] [data-testid="stExpander"] details[open] > summary {
     background: #EDEAE3 !important;
     color: #1a1a1a !important;
-    border-bottom: 2px solid #1a1a1a !important;
-}
-[data-testid="stMain"] [data-testid="stExpander"] details summary:hover {
-    background: #EDEAE3 !important;
-    color: #1a1a1a !important;
+    border-bottom: 1px solid #D6D2CA !important;
 }
 [data-testid="stMain"] [data-testid="stExpander"] details > div > div {
     padding: 0 !important;
@@ -1868,7 +1856,7 @@ for tab, lb in zip(lb_tabs, SA_LOOKBACKS):
 
         tab.markdown("<br>", unsafe_allow_html=True)
         with tab.expander(
-            f"📊  SENSITIVITY INTERPRETATION  —  {lb}Y LOOKBACK",
+            f"SENSITIVITY INTERPRETATION  —  {lb}Y LOOKBACK",
             expanded=False,
         ):
             tab.markdown(
