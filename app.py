@@ -10,9 +10,9 @@ import os
 import requests
 import time
 
-# ── Cloud deployment fix ───────────────────────────────────────────────────────
-# Yahoo Finance blocks cloud server IPs (Render, Heroku, etc.) without a
-# browser User-Agent. Patch the yfinance session once at startup.
+# ── Cloud deployment fix (Render / Heroku / AWS etc.) ─────────────────────────
+# Yahoo Finance blocks requests from datacenter IPs unless a real browser
+# User-Agent is provided. Patch the yfinance session once at startup.
 try:
     _yf_session = requests.Session()
     _yf_session.headers.update({
@@ -26,7 +26,7 @@ try:
     })
     yf.set_config(session=_yf_session)
 except Exception:
-    pass
+    pass  # silently fall back if yfinance version doesn't support set_config
 try:
     from dotenv import load_dotenv
     load_dotenv()  # loads .env file from project directory automatically
@@ -46,17 +46,18 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap');
 
-/* ══ BASE ════════════════════════════════════════════════════════════════════ */
-html, body, [class*="css"] { font-family:'Space Mono',monospace; background:#F5F3EE; color:#1a1a1a; }
-.stApp { background:#F5F3EE; }
+html, body, [class*="css"] { font-family:'Inter',sans-serif; background:#F5F2EB; color:#1a1a1a; }
+.stApp { background:#F5F2EB; }
 
-/* ══ SIDEBAR ════════════════════════════════════════════════════════════════ */
+/* ══ SIDEBAR — Institutional / Bloomberg-meets-Stripe ═══════════════════════ */
 [data-testid="stSidebar"] {
-    background:#FFFFFF;
-    border-right:1px solid #E0DDD6;
+    background:#F0EDE6;
+    border-right:1px solid #D6D2CA;
     padding:0;
 }
-[data-testid="stSidebar"] > div:first-child { padding:16px 18px 24px 18px; }
+[data-testid="stSidebar"] > div:first-child {
+    padding:16px 18px 24px 18px;
+}
 [data-testid="stSidebar"] * {
     font-family:'Space Mono',monospace !important;
     color:#1a1a1a !important;
@@ -68,20 +69,20 @@ html, body, [class*="css"] { font-family:'Space Mono',monospace; background:#F5F
     font-size:0.58rem;
     font-weight:400;
     letter-spacing:0.20em;
-    color:#27AE60;
+    color:#999;
     text-transform:uppercase;
     margin:20px 0 8px 0;
     padding-bottom:6px;
-    border-bottom:1px solid #E0DDD6;
+    border-bottom:1px solid #D0CCC5;
 }
 .sb-section:first-child { margin-top:8px; }
 
-/* ── Labels ── */
+/* ── Native widget labels ── */
 [data-testid="stSidebar"] label {
     font-size:0.60rem !important;
     font-weight:400 !important;
     letter-spacing:0.14em !important;
-    color:#888 !important;
+    color:#777 !important;
     text-transform:uppercase !important;
 }
 
@@ -89,11 +90,11 @@ html, body, [class*="css"] { font-family:'Space Mono',monospace; background:#F5F
 [data-testid="stSidebar"] input[type="text"],
 [data-testid="stSidebar"] [data-testid="stTextInput"] input,
 [data-testid="stSidebar"] div[data-baseweb="input"] input[type="text"] {
-    background:#FFFFFF !important;
-    background-color:#FFFFFF !important;
+    background:#F0EDE6 !important;
+    background-color:#F0EDE6 !important;
     color:#1a1a1a !important;
     border:none !important;
-    border-bottom:1px solid #CCCCCC !important;
+    border-bottom:1px solid #C8C4BC !important;
     border-radius:0 !important;
     font-family:'Space Mono',monospace !important;
     font-size:0.74rem !important;
@@ -102,26 +103,26 @@ html, body, [class*="css"] { font-family:'Space Mono',monospace; background:#F5F
 }
 [data-testid="stSidebar"] [data-testid="stTextInput"] > div,
 [data-testid="stSidebar"] [data-testid="stTextInput"] div[data-baseweb="input"] {
-    background:#FFFFFF !important;
-    background-color:#FFFFFF !important;
+    background:#F0EDE6 !important;
+    background-color:#F0EDE6 !important;
     border:none !important;
     border-radius:0 !important;
     box-shadow:none !important;
 }
 [data-testid="stSidebar"] input[type="text"]::placeholder {
-    color:#BBBBBB !important;
+    color:#AAAAAA !important;
     font-style:normal !important;
 }
 
-/* ── Number input ── */
+/* ── Number input — force light background ── */
 [data-testid="stSidebar"] input[type="number"],
 [data-testid="stSidebar"] [data-testid="stNumberInput"] input,
 [data-testid="stSidebar"] div[data-baseweb="input"] input,
 [data-testid="stSidebar"] div[data-baseweb="base-input"] input {
-    background:#FFFFFF !important;
-    background-color:#FFFFFF !important;
+    background:#F0EDE6 !important;
+    background-color:#F0EDE6 !important;
     border:none !important;
-    border-bottom:1px solid #CCCCCC !important;
+    border-bottom:1px solid #C8C4BC !important;
     border-radius:0 !important;
     color:#1a1a1a !important;
     font-family:'Space Mono',monospace !important;
@@ -134,14 +135,15 @@ html, body, [class*="css"] { font-family:'Space Mono',monospace; background:#F5F
 [data-testid="stSidebar"] div[data-baseweb="input"],
 [data-testid="stSidebar"] div[data-baseweb="base-input"],
 [data-testid="stSidebar"] [data-testid="stNumberInput"] > div {
-    background:#FFFFFF !important;
-    background-color:#FFFFFF !important;
+    background:#F0EDE6 !important;
+    background-color:#F0EDE6 !important;
     border:none !important;
     border-radius:0 !important;
     box-shadow:none !important;
 }
+/* stepper +/- buttons */
 [data-testid="stSidebar"] [data-testid="stNumberInput"] button {
-    background:#F5F3EE !important;
+    background:#E8E4DC !important;
     color:#555 !important;
     border:none !important;
     border-radius:0 !important;
@@ -155,10 +157,10 @@ html, body, [class*="css"] { font-family:'Space Mono',monospace; background:#F5F
     min-height:28px !important;
 }
 
-/* ── Preset pill buttons ── */
+/* ── Benchmark preset pill buttons ── */
 [data-testid="stSidebar"] [data-testid^="stButton-preset_"] > button {
-    background:#FFFFFF !important;
-    border:1px solid #CCCCCC !important;
+    background:#EDEAE3 !important;
+    border:1px solid #D0CCC5 !important;
     color:#555 !important;
     font-family:'Space Mono',monospace !important;
     font-size:0.58rem !important;
@@ -170,12 +172,11 @@ html, body, [class*="css"] { font-family:'Space Mono',monospace; background:#F5F
     line-height:1 !important;
 }
 [data-testid="stSidebar"] [data-testid^="stButton-preset_"] > button:hover {
-    background:#F0FFF4 !important;
-    border-color:#27AE60 !important;
-    color:#27AE60 !important;
+    background:#D0CCC5 !important;
+    color:#1a1a1a !important;
 }
 
-/* ── Remove / delete button ── */
+/* ── Remove / delete button — truly minimal ── */
 [data-testid="stSidebar"] button[kind="secondary"] {
     padding:0 4px !important;
     min-height:20px !important;
@@ -190,30 +191,32 @@ html, body, [class*="css"] { font-family:'Space Mono',monospace; background:#F5F
     letter-spacing:0 !important;
 }
 [data-testid="stSidebar"] button[kind="secondary"]:hover {
-    color:#E74C3C !important;
+    color:#555 !important;
     background:transparent !important;
 }
 
-/* ── Section toggle arrows ── */
+/* ── Section toggle arrows — tiny, right-aligned ── */
 [data-testid="stSidebar"] button[data-testid*="toggle_sb"] {
     background:transparent !important;
     border:none !important;
-    color:#BBBBBB !important;
+    color:#AAA !important;
     font-size:0.55rem !important;
     padding:2px 0 !important;
     min-height:20px !important;
     box-shadow:none !important;
     letter-spacing:0 !important;
 }
-[data-testid="stSidebar"] button[data-testid*="toggle_sb"]:hover { color:#27AE60 !important; }
+[data-testid="stSidebar"] button[data-testid*="toggle_sb"]:hover {
+    color:#555 !important;
+}
 
-/* ── All sidebar buttons ── */
+/* ── All sidebar buttons default: light/transparent ── */
 [data-testid="stSidebar"] .stButton > button {
     font-family:'Space Mono',monospace !important;
     font-size:0.62rem !important;
-    background:#FFFFFF !important;
-    border:1px solid #CCCCCC !important;
-    border-radius:2px !important;
+    background:transparent !important;
+    border:1px solid #C8C4BC !important;
+    border-radius:0 !important;
     color:#555 !important;
     padding:4px 8px !important;
     letter-spacing:0.08em !important;
@@ -222,54 +225,140 @@ html, body, [class*="css"] { font-family:'Space Mono',monospace; background:#F5F
     min-height:28px !important;
 }
 [data-testid="stSidebar"] .stButton > button:hover {
-    border-color:#27AE60 !important;
-    color:#27AE60 !important;
-    background:#F0FFF4 !important;
+    border-color:#1a1a1a !important;
+    color:#1a1a1a !important;
+    background:transparent !important;
 }
 
-/* ── CALCULATE RISK button ── */
+/* ── CALCULATE RISK — only the run button, targeted by key ── */
 [data-testid="stSidebar"] [data-testid="stButton-run_btn"] > button,
 button[data-testid="run_btn"] {
-    background:#111111 !important;
-    color:#4ADE80 !important;
+    background:#1a1a1a !important;
+    color:#F5F2EB !important;
     border:none !important;
-    border-radius:2px !important;
+    border-radius:0 !important;
     font-size:0.66rem !important;
     letter-spacing:0.20em !important;
     padding:11px 0 !important;
     width:100% !important;
     font-weight:400 !important;
+}
+[data-testid="stSidebar"] [data-testid="stButton-run_btn"] > button:hover {
+    background:#333 !important;
+}
+
+/* ── Sliders — thin, muted ── */
+div[data-testid="stSlider"] * {
+    color:#555 !important;
     font-family:'Space Mono',monospace !important;
-    transition:background 0.15s !important;
 }
-[data-testid="stSidebar"] [data-testid="stButton-run_btn"] > button:hover,
-button[data-testid="run_btn"]:hover {
+div[data-testid="stSlider"] p {
+    font-size:0.60rem !important;
+    font-weight:400 !important;
+    letter-spacing:0.12em !important;
+    color:#777 !important;
+}
+div[data-testid="stSlider"] [data-testid="stSliderThumbValue"] {
+    font-size:0.72rem !important;
+    font-weight:700 !important;
+    color:#1a1a1a !important;
+}
+[data-testid="stSidebar"] [data-testid="stSlider"] > div > div > div {
+    background:#C8C4BC !important;
+    height:2px !important;
+}
+[data-testid="stSidebar"] [data-testid="stSlider"] > div > div > div > div {
     background:#1a1a1a !important;
-    color:#6EE7A0 !important;
+    height:2px !important;
 }
-
-/* ── Sliders ── */
 [data-testid="stSidebar"] [data-testid="stSlider"] [role="slider"] {
-    background:#27AE60 !important;
-    border:2px solid #27AE60 !important;
+    background:#1a1a1a !important;
+    border:none !important;
+    width:10px !important;
+    height:10px !important;
+    box-shadow:none !important;
 }
-[data-testid="stSidebar"] [data-testid="stSlider"] [data-testid="stSliderTrack"] > div:nth-child(2) {
-    background:#27AE60 !important;
-}
-[data-testid="stSlider"] [role="slider"] { background:#27AE60 !important; border:2px solid #27AE60 !important; }
-[data-testid="stSlider"] [data-testid="stSliderTrack"] > div:nth-child(2) { background:#27AE60 !important; }
 
-/* ── Select boxes ── */
-[data-testid="stSidebar"] [data-baseweb="select"] > div,
-[data-testid="stSidebar"] [data-baseweb="select"] div[data-baseweb="select"] > div {
-    background:#FFFFFF !important;
-    border:1px solid #CCCCCC !important;
-    border-radius:2px !important;
+/* ── Radio buttons — minimal ── */
+div[data-testid="stRadio"] label {
+    color:#555 !important;
+    font-size:0.68rem !important;
+    font-weight:400 !important;
+    letter-spacing:0.08em !important;
+}
+div[data-testid="stRadio"] [data-testid="stMarkdownContainer"] p {
+    font-size:0.68rem !important;
+    color:#555 !important;
+}
+[data-testid="stSidebar"] [data-testid="stRadio"] > div {
+    gap:2px !important;
+}
+
+/* ══ EXPANDERS — main content: normal boxes ════════════════════════════════ */
+[data-testid="stMain"] [data-testid="stExpander"] {
+    border:1px solid #D6D2CA !important;
+    border-radius:4px !important;
+    background:#F9F7F3 !important;
+    margin-bottom:8px !important;
+}
+[data-testid="stMain"] [data-testid="stExpander"] summary {
+    font-family:'Space Mono',monospace !important;
+    font-size:0.68rem !important;
+    letter-spacing:0.12em !important;
+    color:#555 !important;
+    padding:10px 14px !important;
+    background:#F9F7F3 !important;
+}
+[data-testid="stMain"] [data-testid="stExpander"] summary:hover {
+    background:#F0EDE6 !important;
+    color:#1a1a1a !important;
+}
+[data-testid="stMain"] [data-testid="stExpander"] * {
     color:#1a1a1a !important;
     font-family:'Space Mono',monospace !important;
 }
+[data-testid="stMain"] [data-testid="stExpander"] > div > div {
+    padding:14px 16px !important;
+    background:#F9F7F3 !important;
+}
 
-/* ── Sidebar expanders ── */
+/* ── Main content inputs — white background, readable ── */
+[data-testid="stMain"] input[type="text"],
+[data-testid="stMain"] input[type="number"],
+[data-testid="stMain"] [data-testid="stTextInput"] input,
+[data-testid="stMain"] [data-testid="stNumberInput"] input,
+[data-testid="stMain"] div[data-baseweb="input"] input,
+[data-testid="stMain"] div[data-baseweb="base-input"] input {
+    background:#FFFFFF !important;
+    background-color:#FFFFFF !important;
+    color:#1a1a1a !important;
+    border:1px solid #D6D2CA !important;
+    border-radius:3px !important;
+    font-family:'Space Mono',monospace !important;
+    font-size:0.76rem !important;
+    box-shadow:none !important;
+}
+[data-testid="stMain"] div[data-baseweb="input"],
+[data-testid="stMain"] div[data-baseweb="base-input"],
+[data-testid="stMain"] [data-testid="stTextInput"] > div,
+[data-testid="stMain"] [data-testid="stNumberInput"] > div {
+    background:#FFFFFF !important;
+    background-color:#FFFFFF !important;
+    border:1px solid #D6D2CA !important;
+    border-radius:3px !important;
+    box-shadow:none !important;
+}
+[data-testid="stMain"] input::placeholder {
+    color:#AAAAAA !important;
+    font-style:italic !important;
+}
+[data-testid="stMain"] [data-testid="stNumberInput"] button {
+    background:#F5F2EB !important;
+    color:#555 !important;
+    border:none !important;
+    border-left:1px solid #D6D2CA !important;
+}
+/* ══ EXPANDERS — sidebar: flat, no box ════════════════════════════════════ */
 [data-testid="stSidebar"] [data-testid="stExpander"] {
     border:none !important;
     border-radius:0 !important;
@@ -282,24 +371,26 @@ button[data-testid="run_btn"]:hover {
     font-size:0.60rem !important;
     font-weight:400 !important;
     letter-spacing:0.20em !important;
-    color:#888 !important;
+    color:#888888 !important;
     padding:8px 0 !important;
-    border-bottom:1px solid #E0DDD6 !important;
+    border-bottom:1px solid #D0CCC5 !important;
     background:transparent !important;
 }
 [data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {
     background:transparent !important;
-    color:#27AE60 !important;
+    color:#1a1a1a !important;
 }
-[data-testid="stSidebar"] [data-testid="stExpander"] > div > div { padding:8px 0 0 0 !important; }
+[data-testid="stSidebar"] [data-testid="stExpander"] > div > div {
+    padding:8px 0 0 0 !important;
+}
 
-/* ══ SECTION LABEL ══════════════════════════════════════════════════════════ */
+/* ══ MAIN SECTION LABEL ═════════════════════════════════════════════════════ */
 .section-label {
     font-family:'Space Mono',monospace;
     font-size:0.60rem;
     font-weight:400;
     letter-spacing:0.16em;
-    color:#27AE60;
+    color:#888;
     text-transform:uppercase;
     margin-bottom:0.3rem;
     margin-top:0.7rem;
@@ -308,18 +399,18 @@ button[data-testid="run_btn"]:hover {
 /* ══ METRIC CARDS ══════════════════════════════════════════════════════════ */
 .metric-card {
     background:#FFFFFF;
-    border:1px solid #E0DDD6;
-    border-radius:3px;
+    border:none;
+    border-radius:0;
     padding:14px 18px 12px 18px;
     font-family:'Space Mono',monospace;
     box-shadow:none;
-    border-top:2px solid #E0DDD6;
+    border-top:2px solid #E8E4DC;
 }
 .metric-label { font-size:0.52rem; letter-spacing:0.16em; color:#999; text-transform:uppercase; margin-bottom:10px; }
 .metric-value { font-size:1.55rem; font-weight:700; color:#1a1a1a; line-height:1; letter-spacing:-0.02em; }
 .metric-sub   { font-size:0.58rem; color:#BBB; margin-top:8px; letter-spacing:0.06em; }
-.metric-var   { border-top:2px solid #27AE60; }
-.metric-es    { border-top:2px solid #1A8040; }
+.metric-var   { border-top:2px solid #C0392B; }
+.metric-es    { border-top:2px solid #7B241C; }
 .metric-vol   { border-top:2px solid #555; }
 .metric-loss  { border-top:2px solid #AAAAAA; }
 
@@ -335,31 +426,31 @@ div[data-testid="stTabs"] button {
     border-radius:0 !important;
 }
 div[data-testid="stTabs"] button[aria-selected="true"] {
-    color:#27AE60 !important;
-    border-bottom:2px solid #27AE60 !important;
+    color:#1a1a1a !important;
+    border-bottom:1px solid #1a1a1a !important;
     font-weight:700 !important;
 }
 div[data-testid="stTabs"] [role="tablist"] {
-    border-bottom:1px solid #E0DDD6 !important;
+    border-bottom:1px solid #D4CFC4 !important;
     gap:0 !important;
 }
 
 /* ══ CHART CARD ════════════════════════════════════════════════════════════ */
 .chart-card {
     background:#FFFFFF;
-    border-radius:3px;
+    border-radius:0;
     padding:4px 4px 0 4px;
     box-shadow:none;
-    border:1px solid #E0DDD6;
+    border:1px solid #E8E4DC;
     margin-bottom:8px;
 }
 
-/* ══ INTERPRETATION PANEL ═══════════════════════════════════════════════════ */
+/* ══ INTERPRETATION PANEL ══════════════════════════════════════════════════ */
 .interp-panel {
     background:#FFFFFF;
-    border-radius:3px;
+    border-radius:0;
     padding:20px 24px;
-    border:1px solid #E0DDD6;
+    border:1px solid #E8E4DC;
     margin-top:8px;
 }
 .interp-title {
@@ -372,29 +463,29 @@ div[data-testid="stTabs"] [role="tablist"] {
     margin-bottom:14px;
 }
 .interp-text { font-size:0.88rem; color:#2a2a2a; line-height:1.8; font-family:'Inter',sans-serif; }
-.interp-text b { color:#27AE60; }
+.interp-text b { color:#C0392B; }
 .interp-highlight {
-    background:#F0FFF4;
-    border-left:2px solid #27AE60;
+    background:#F9F7F3;
+    border-left:2px solid #C0392B;
     padding:10px 16px;
     border-radius:0;
     margin:14px 0;
     font-size:0.82rem;
     color:#444;
-    font-family:'Space Mono',monospace;
+    font-family:'Space Mono',sans-serif;
     line-height:1.7;
 }
 
-/* ══ COMPARISON TABLE ═══════════════════════════════════════════════════════ */
+/* ══ COMPARISON TABLE ══════════════════════════════════════════════════════ */
 .compare-table { width:100%; font-family:'Space Mono',monospace; font-size:0.76rem; border-collapse:collapse; }
-.compare-table th { background:#111111; color:#4ADE80; padding:10px 14px; text-align:left; font-size:0.58rem; letter-spacing:0.12em; text-transform:uppercase; font-weight:400; }
-.compare-table td { padding:10px 14px; border-bottom:1px solid #F0FFF4; color:#1a1a1a; }
-.compare-table tr:hover td { background:#F0FFF4; }
+.compare-table th { background:#1a1a1a; color:#F5F2EB; padding:10px 14px; text-align:left; font-size:0.58rem; letter-spacing:0.12em; text-transform:uppercase; font-weight:400; }
+.compare-table td { padding:10px 14px; border-bottom:1px solid #EDEAE3; color:#1a1a1a; }
+.compare-table tr:hover td { background:#F5F2EB; }
 
-/* ══ INFO BOX ═══════════════════════════════════════════════════════════════ */
-.info-box { background:#F0FFF4; border-left:2px solid #27AE60; padding:12px 16px; font-size:0.75rem; color:#555; margin:12px 0; font-family:'Inter',sans-serif; line-height:1.7; }
+/* ══ INFO BOX ══════════════════════════════════════════════════════════════ */
+.info-box { background:#F9F7F3; border-left:2px solid #888; padding:12px 16px; font-size:0.75rem; color:#555; margin:12px 0; font-family:'Inter',sans-serif; line-height:1.7; }
 
-/* ══ MAIN EXPANDERS ══════════════════════════════════════════════════════════ */
+/* ── Collapsible Interpretation / Diagnostic expanders ───────────────────── */
 [data-testid="stMain"] [data-testid="stExpander"] details {
     border: none !important;
     background: transparent !important;
@@ -408,60 +499,28 @@ div[data-testid="stTabs"] [role="tablist"] {
     color: #888 !important;
     text-transform: uppercase !important;
     padding: 11px 18px !important;
-    background: #FFFFFF !important;
-    border: 1px solid #E0DDD6 !important;
-    border-radius: 2px !important;
+    background: #F5F2EB !important;
+    border: 1px solid #D6D2CA !important;
+    border-radius: 0 !important;
     transition: background 0.15s, color 0.15s !important;
 }
 [data-testid="stMain"] [data-testid="stExpander"] details[open] > summary {
-    background: #F0FFF4 !important;
-    color: #27AE60 !important;
-    border-bottom: 2px solid #27AE60 !important;
+    background: #EDEAE3 !important;
+    color: #1a1a1a !important;
+    border-bottom: 2px solid #1a1a1a !important;
 }
 [data-testid="stMain"] [data-testid="stExpander"] details summary:hover {
-    background: #F0FFF4 !important;
-    color: #27AE60 !important;
+    background: #EDEAE3 !important;
+    color: #1a1a1a !important;
 }
-[data-testid="stMain"] [data-testid="stExpander"] details > div > div { padding: 0 !important; }
-
-/* ══ MAIN INPUTS ═════════════════════════════════════════════════════════════ */
-[data-testid="stMain"] input[type="text"],
-[data-testid="stMain"] input[type="number"],
-[data-testid="stMain"] [data-testid="stTextInput"] input,
-[data-testid="stMain"] [data-testid="stNumberInput"] input,
-[data-testid="stMain"] div[data-baseweb="input"] input,
-[data-testid="stMain"] div[data-baseweb="base-input"] input {
-    background:#FFFFFF !important;
-    background-color:#FFFFFF !important;
-    color:#1a1a1a !important;
-    border:1px solid #CCCCCC !important;
-    border-radius:2px !important;
-    font-family:'Space Mono',monospace !important;
-    font-size:0.76rem !important;
-    box-shadow:none !important;
-}
-[data-testid="stMain"] div[data-baseweb="input"],
-[data-testid="stMain"] div[data-baseweb="base-input"],
-[data-testid="stMain"] [data-testid="stTextInput"] > div,
-[data-testid="stMain"] [data-testid="stNumberInput"] > div {
-    background:#FFFFFF !important;
-    background-color:#FFFFFF !important;
-    border:1px solid #CCCCCC !important;
-    border-radius:2px !important;
-    box-shadow:none !important;
-}
-[data-testid="stMain"] input::placeholder { color:#BBBBBB !important; font-style:italic !important; }
-[data-testid="stMain"] [data-testid="stNumberInput"] button {
-    background:#F5F3EE !important;
-    color:#555 !important;
-    border:none !important;
-    border-left:1px solid #CCCCCC !important;
+[data-testid="stMain"] [data-testid="stExpander"] details > div > div {
+    padding: 0 !important;
 }
 
-/* ══ MISC ════════════════════════════════════════════════════════════════════ */
+/* ══ MISC ══════════════════════════════════════════════════════════════════ */
 #MainMenu, footer, header { visibility:hidden; }
 .block-container { padding-top:1rem !important; padding-bottom:1rem !important; max-width:1200px !important; }
-hr { border:none; border-top:1px solid #E0DDD6; margin:1.2rem 0; }
+hr { border:none; border-top:1px solid #D4CFC4; margin:1.2rem 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -474,13 +533,13 @@ QUICK_ADD = ["SPY", "QQQ", "BND", "GLD", "AAPL", "MSFT", "AMZN", "TSLA", "NVDA",
 # ── Colour palette (industry standard — minimal) ───────────────────────────────
 C_HIST    = "#BFBFBF"       # neutral gray — full distribution
 C_TAIL    = "rgba(192,57,43,0.30)"  # soft red transparent — tail shading
-C_VAR     = "#27AE60"       # red — VaR line
-C_ES      = "#1A8040"       # dark red — ES line
+C_VAR     = "#C0392B"       # red — VaR line
+C_ES      = "#7B241C"       # dark red — ES line
 C_KDE     = "#555555"       # dark gray — KDE overlay
 C_NORM    = "#1a1a1a"       # black — normal curve (parametric)
-C_GRID    = "#E8F5E9"
+C_GRID    = "#EEEBE4"
 C_BG      = "#FFFFFF"
-C_PLOTBG  = "#FAFFFE"
+C_PLOTBG  = "#FAFAF8"
 
 # ── Base Plotly layout ─────────────────────────────────────────────────────────
 def base_layout(title_text, x_title, height=360):
@@ -664,7 +723,7 @@ def _section_header(label, key):
     col_l.markdown(
         f'''<div style="font-family:Space Mono,monospace;font-size:0.58rem;font-weight:400;
         letter-spacing:0.20em;color:#999;text-transform:uppercase;padding:6px 0 6px 0;
-        border-bottom:1px solid #CCCCCC;margin-bottom:0;">{label}</div>''',
+        border-bottom:1px solid #D0CCC5;margin-bottom:0;">{label}</div>''',
         unsafe_allow_html=True
     )
     if col_r.button(arrow, key=f"toggle_{key}"):
@@ -675,7 +734,7 @@ with st.sidebar:
 
     # ── Wordmark ──
     st.markdown("""
-    <div style="padding-bottom:16px;border-bottom:1px solid #CCCCCC;margin-bottom:4px;">
+    <div style="padding-bottom:16px;border-bottom:1px solid #D0CCC5;margin-bottom:4px;">
         <div style="font-family:Space Mono,monospace;font-size:1.0rem;font-weight:700;
                     color:#1a1a1a;letter-spacing:0.02em;">KARAM.</div>
         <div style="font-family:Space Mono,monospace;font-size:0.55rem;color:#999;
@@ -692,7 +751,7 @@ with st.sidebar:
         # Column headers
         st.markdown("""
         <div style="display:grid;grid-template-columns:2fr 1.6fr 0.4fr;
-                    padding:6px 0 4px 0;border-bottom:1px solid #CCCCCC;margin-top:6px;">
+                    padding:6px 0 4px 0;border-bottom:1px solid #C8C4BC;margin-top:6px;">
             <span style="font-family:Space Mono,monospace;font-size:0.52rem;
                          letter-spacing:0.14em;color:#AAA;text-transform:uppercase;">Ticker</span>
             <span style="font-family:Space Mono,monospace;font-size:0.52rem;
@@ -727,7 +786,7 @@ with st.sidebar:
         # Total allocation
         total_w = sum(raw_weights.values())
         ok = abs(total_w - 100.0) <= 0.11
-        alloc_color = "#888" if ok else "#27AE60"
+        alloc_color = "#888" if ok else "#C0392B"
         alloc_sym   = "✓" if ok else "⚠"
         st.markdown(
             f'<div style="font-family:Space Mono,monospace;font-size:0.58rem;color:{alloc_color};'
@@ -880,13 +939,13 @@ with st.sidebar:
 
     # ── Thin divider ─────────────────────────────────────────────────────────
     st.sidebar.markdown(
-        '<div style="border-top:1px solid #E0DDD6;margin:10px 0 8px 0;"></div>',
+        '<div style="border-top:1px solid #D6D2CA;margin:10px 0 8px 0;"></div>',
         unsafe_allow_html=True)
 
     # ── Per-slot: compact single-row layout ───────────────────────────────────
     for _si, _sp in enumerate(st.session_state.sa_portfolios):
         _enabled = _sp["enabled"]
-        _accent  = "#27AE60" if _enabled else "#AAAAAA"
+        _accent  = "#C0392B" if _enabled else "#AAAAAA"
         _status  = "ACTIVE" if _enabled else "OFF"
 
         # Name row with status badge
@@ -936,7 +995,7 @@ with st.sidebar:
 st.markdown("""
 <p class="section-label">// Quantitative Risk Tool</p>
 <h1 style="font-family:'Space Mono',monospace;font-size:2rem;line-height:1.1;margin:0;font-weight:700;letter-spacing:-0.02em;color:#1a1a1a;">TAIL RISK</h1>
-<h1 style="font-family:'Space Mono',monospace;font-size:2rem;line-height:1.1;margin:0;font-weight:700;letter-spacing:-0.02em;color:#AAAAAA;">ANALYZER</h1>
+<h1 style="font-family:'Space Mono',monospace;font-size:2rem;line-height:1.1;margin:0;font-weight:700;letter-spacing:-0.02em;color:#B5B0A4;">ANALYZER</h1>
 <p style="font-family:'Space Mono',monospace;font-size:0.75rem;color:#555;margin-top:0.8rem;letter-spacing:0.05em;">Real market data via yFinance &nbsp;·&nbsp; Historical &nbsp;·&nbsp; Parametric &nbsp;·&nbsp; Monte Carlo</p>
 """, unsafe_allow_html=True)
 st.markdown("---")
@@ -947,7 +1006,7 @@ _has_cached = bool(st.session_state.get("_cached_results"))
 if not run and not _has_cached:
     st.markdown("""
     <div style="display:flex;align-items:center;justify-content:center;height:260px;">
-        <p style="font-family:'Space Mono',monospace;font-size:0.78rem;color:#AAAAAA;letter-spacing:0.12em;">
+        <p style="font-family:'Space Mono',monospace;font-size:0.78rem;color:#B5B0A4;letter-spacing:0.12em;">
             CONFIGURE ASSETS AND CLICK CALCULATE RISK
         </p>
     </div>
@@ -991,7 +1050,7 @@ def load_market_data(tickers_tuple, lookback_years, days):
                     break
             except Exception:
                 pass
-            time.sleep(1.5 * (_attempt + 1))   # back-off: 1.5s, 3s, 4.5s
+            time.sleep(1.5 * (_attempt + 1))   # back-off: 1.5s → 3s → 4.5s
         if data.empty:
             return None, f"Could not fetch data for {ticker}. Please check the ticker symbol."
         _col = data['Adj Close']
@@ -1160,14 +1219,14 @@ if method == "All (Compare)":
     fig_bar = go.Figure()
     fig_bar.add_trace(go.Bar(
         name=f"VaR ({confidence_pct}%)", x=methods_list, y=var_vals,
-        marker_color=C_VAR, marker_line=dict(color="#1A8040", width=1),
+        marker_color=C_VAR, marker_line=dict(color="#8B1A1A", width=1),
         text=[f"<b>${v:,.0f}</b>" for v in var_vals],
         textposition="outside",
         textfont=dict(size=13, family="Space Mono, monospace", color="#1a1a1a"),
     ))
     fig_bar.add_trace(go.Bar(
         name=f"ES ({confidence_pct}%)", x=methods_list, y=es_vals,
-        marker_color=C_ES, marker_line=dict(color="#0D4020", width=1),
+        marker_color=C_ES, marker_line=dict(color="#4A0E0E", width=1),
         text=[f"<b>${v:,.0f}</b>" for v in es_vals],
         textposition="outside",
         textfont=dict(size=13, family="Space Mono, monospace", color="#1a1a1a"),
@@ -1279,7 +1338,7 @@ with st.expander("📖  INTERPRETATION", expanded=False):
     _ann = f"~${annualised_var:,.0f}"
 
     _method_cfg = {
-        "Historical":    ("#27AE60", "HISTORICAL SIMULATION",
+        "Historical":    ("#C0392B", "HISTORICAL SIMULATION",
                           "No distributional assumption — tail behaviour taken directly"
                           " from observed rolling returns."),
         "Parametric":    ("#2C6EAB", "PARAMETRIC  ·  NORMAL DISTRIBUTION",
@@ -1345,7 +1404,7 @@ with st.expander("📖  INTERPRETATION", expanded=False):
         f'''<div style="background:#FFFFFF;border:1px solid #E0DDD6;padding:0;margin-top:2px;">
 
   <div style="display:flex;align-items:center;gap:10px;padding:11px 20px;
-              border-bottom:1px solid #E8E8E4;background:#FAFFFE;">
+              border-bottom:1px solid #ECEAE4;background:#FAFAF8;">
     <span style="width:7px;height:7px;border-radius:50%;background:{_col};
                  display:inline-block;flex-shrink:0;"></span>
     <span style="font-family:Space Mono,monospace;font-size:0.54rem;
@@ -1366,20 +1425,20 @@ with st.expander("📖  INTERPRETATION", expanded=False):
   </div>
 
   <div style="display:grid;grid-template-columns:repeat(4,1fr);
-              border-top:1px solid #E8E8E4;">
-    <div style="padding:12px 20px;border-right:1px solid #E8E8E4;">
+              border-top:1px solid #ECEAE4;">
+    <div style="padding:12px 20px;border-right:1px solid #ECEAE4;">
       <p style="font-family:Space Mono,monospace;font-size:0.47rem;letter-spacing:0.12em;
                 color:#BBBBBB;text-transform:uppercase;margin:0 0 5px 0;">{days}D VaR ({confidence_pct}%)</p>
       <p style="font-family:Space Mono,monospace;font-size:1.0rem;
-                font-weight:700;color:#27AE60;margin:0;">${interp_var:,.0f}</p>
+                font-weight:700;color:#C0392B;margin:0;">${interp_var:,.0f}</p>
     </div>
-    <div style="padding:12px 20px;border-right:1px solid #E8E8E4;">
+    <div style="padding:12px 20px;border-right:1px solid #ECEAE4;">
       <p style="font-family:Space Mono,monospace;font-size:0.47rem;letter-spacing:0.12em;
                 color:#BBBBBB;text-transform:uppercase;margin:0 0 5px 0;">{days}D ES ({confidence_pct}%)</p>
       <p style="font-family:Space Mono,monospace;font-size:1.0rem;
-                font-weight:700;color:#1A8040;margin:0;">${interp_es:,.0f}</p>
+                font-weight:700;color:#7B241C;margin:0;">${interp_es:,.0f}</p>
     </div>
-    <div style="padding:12px 20px;border-right:1px solid #E8E8E4;">
+    <div style="padding:12px 20px;border-right:1px solid #ECEAE4;">
       <p style="font-family:Space Mono,monospace;font-size:0.47rem;letter-spacing:0.12em;
                 color:#BBBBBB;text-transform:uppercase;margin:0 0 5px 0;">Ann. Volatility</p>
       <p style="font-family:Space Mono,monospace;font-size:1.0rem;
@@ -1612,7 +1671,7 @@ def generate_diagnostics_for_lb(names, all_sa_results_dict, lb):
 
 # ══ PORTFOLIO DEFINITIONS ═════════════════════════════════════════════════════
 st.markdown("""
-<div style="background:#F8FFF9;border-left:2px solid #27AE60;padding:10px 16px;
+<div style="background:#F9F7F3;border-left:2px solid #C0392B;padding:10px 16px;
             font-family:'Space Mono',monospace;font-size:0.68rem;color:#555;margin-bottom:18px;
             letter-spacing:0.04em;">
   <b>Portfolio A</b> uses your active sidebar portfolio.
@@ -1636,14 +1695,14 @@ def parse_portfolio(p, fallback_val):
         return None, str(e)
 
 colors_port = {
-    "Portfolio A (Active)": "#27AE60",
+    "Portfolio A (Active)": "#C0392B",
     "S&P 500":              "#2C5F8A",
     "Nasdaq":               "#6A3FA0",
     "Dow Jones":            "#1A6B5A",
     "Bonds":                "#7A6A3A",
-    "60/40":                "#27AE60",
+    "60/40":                "#5A7A3A",
     "Portfolio B":          "#2C5F8A",
-    "Portfolio C":          "#27AE60",
+    "Portfolio C":          "#5A7A3A",
 }
 def port_color(name):
     for k in colors_port:
@@ -1660,7 +1719,7 @@ if _any_active:
             if _parsed:
                 _alloc = " / ".join(f"{t} {w*100:.0f}%" for t,w in zip(_parsed["tickers"], _parsed["weights"]))
                 _chips.append(
-                    f'<span style="display:inline-block;background:#FFFFFF;border:1px solid #E0DDD6;' +
+                    f'<span style="display:inline-block;background:#FFFFFF;border:1px solid #D6D2CA;' +
                     f'font-family:Space Mono,monospace;font-size:0.60rem;color:#555;' +
                     f'padding:4px 10px;margin-right:8px;letter-spacing:0.06em;">' +
                     f'<b style="color:{port_color(_p["name"])}">{_p["name"]}</b>' +
@@ -1810,11 +1869,11 @@ for tab, lb in zip(lb_tabs, SA_LOOKBACKS):
                 f'''<div style="background:#FFFFFF;border:1px solid #E0DDD6;padding:0;margin-top:2px;">
 
   <div style="display:flex;align-items:center;gap:10px;padding:11px 20px;
-              border-bottom:1px solid #E8E8E4;background:#FAFFFE;">
-    <span style="width:7px;height:7px;border-radius:50%;background:#27AE60;
+              border-bottom:1px solid #ECEAE4;background:#FAFAF8;">
+    <span style="width:7px;height:7px;border-radius:50%;background:#C0392B;
                  display:inline-block;flex-shrink:0;"></span>
     <span style="font-family:Space Mono,monospace;font-size:0.54rem;
-                 letter-spacing:0.16em;color:#27AE60;font-weight:700;">{lb}Y LOOKBACK WINDOW</span>
+                 letter-spacing:0.16em;color:#C0392B;font-weight:700;">{lb}Y LOOKBACK WINDOW</span>
     <span style="font-family:Space Mono,monospace;font-size:0.56rem;
                  color:#BBBBBB;margin-left:auto;">{len(SA_CONFIDENCE)} confidence levels&nbsp;·&nbsp;{len(SA_HORIZONS)} horizons</span>
   </div>
@@ -1831,20 +1890,20 @@ for tab, lb in zip(lb_tabs, SA_LOOKBACKS):
     </p>
   </div>
 
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #E8E8E4;">
-    <div style="padding:12px 20px;border-right:1px solid #E8E8E4;">
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid #ECEAE4;">
+    <div style="padding:12px 20px;border-right:1px solid #ECEAE4;">
       <p style="font-family:Space Mono,monospace;font-size:0.47rem;letter-spacing:0.12em;
                 color:#BBBBBB;text-transform:uppercase;margin:0 0 5px 0;">Stress VaR (99%,20D)</p>
       <p style="font-family:Space Mono,monospace;font-size:0.95rem;
-                font-weight:700;color:#27AE60;margin:0;">${stress_var:,.0f}</p>
+                font-weight:700;color:#C0392B;margin:0;">${stress_var:,.0f}</p>
     </div>
-    <div style="padding:12px 20px;border-right:1px solid #E8E8E4;">
+    <div style="padding:12px 20px;border-right:1px solid #ECEAE4;">
       <p style="font-family:Space Mono,monospace;font-size:0.47rem;letter-spacing:0.12em;
                 color:#BBBBBB;text-transform:uppercase;margin:0 0 5px 0;">Stress / Base</p>
       <p style="font-family:Space Mono,monospace;font-size:0.95rem;
                 font-weight:700;color:#444;margin:0;">{scale_x:.1f}×</p>
     </div>
-    <div style="padding:12px 20px;border-right:1px solid #E8E8E4;">
+    <div style="padding:12px 20px;border-right:1px solid #ECEAE4;">
       <p style="font-family:Space Mono,monospace;font-size:0.47rem;letter-spacing:0.12em;
                 color:#BBBBBB;text-transform:uppercase;margin:0 0 5px 0;">√Time Deviation</p>
       <p style="font-family:Space Mono,monospace;font-size:0.95rem;
@@ -1858,7 +1917,7 @@ for tab, lb in zip(lb_tabs, SA_LOOKBACKS):
     </div>
   </div>
 
-  <div style="padding:12px 20px;border-top:1px solid #E8E8E4;">
+  <div style="padding:12px 20px;border-top:1px solid #ECEAE4;">
     <p style="font-family:Space Mono,monospace;font-size:0.47rem;letter-spacing:0.12em;
               color:#BBBBBB;text-transform:uppercase;margin:0 0 8px 0;">
       VaR at 95% across horizons — {lb}Y window</p>
@@ -1887,7 +1946,7 @@ with comp_tab:
 
     if len(active_portfolios) < 2:
         st.markdown(
-            '''<div style="border:1px solid #E0DDD6;background:#F8FFF9;padding:32px 28px;
+            '''<div style="border:1px solid #D6D2CA;background:#F9F7F3;padding:32px 28px;
             font-family:Space Mono,monospace;font-size:0.70rem;color:#888;
             letter-spacing:0.08em;text-align:center;margin-top:16px;">
             Enable <b style="color:#1a1a1a;">S&P 500 (SPY)</b> or
@@ -1921,7 +1980,7 @@ with comp_tab:
         # ── Section header ───────────────────────────────────────────────────────
         st.markdown("""
         <div style="display:flex;align-items:baseline;gap:16px;margin-bottom:16px;
-                    border-bottom:1px solid #E0DDD6;padding-bottom:12px;">
+                    border-bottom:1px solid #E8E4DC;padding-bottom:12px;">
             <span style="font-family:Space Mono,monospace;font-size:0.58rem;
                          letter-spacing:0.18em;color:#999;text-transform:uppercase;">
                 Metrics normalised to % of portfolio value · Portfolios are fairly comparable
@@ -1953,12 +2012,12 @@ with comp_tab:
                 ref_avg    = norm_metrics[port_names[0]]["avg_var_pct"]
                 ds = m["stress_var_pct"] - ref_stress
                 da = m["avg_var_pct"]    - ref_avg
-                delta_stress = (f'<span style="color:#27AE60;font-size:0.60rem"> ↑{ds:+.2f}%</span>'
+                delta_stress = (f'<span style="color:#C0392B;font-size:0.60rem"> ↑{ds:+.2f}%</span>'
                                 if ds > 0 else
-                                f'<span style="color:#27AE60;font-size:0.60rem"> ↓{ds:+.2f}%</span>')
-                delta_avg    = (f'<span style="color:#27AE60;font-size:0.60rem"> ↑{da:+.2f}%</span>'
+                                f'<span style="color:#5A7A3A;font-size:0.60rem"> ↓{ds:+.2f}%</span>')
+                delta_avg    = (f'<span style="color:#C0392B;font-size:0.60rem"> ↑{da:+.2f}%</span>'
                                 if da > 0 else
-                                f'<span style="color:#27AE60;font-size:0.60rem"> ↓{da:+.2f}%</span>')
+                                f'<span style="color:#5A7A3A;font-size:0.60rem"> ↓{da:+.2f}%</span>')
 
             tbl += (f'<tr>'
                     f'<td><b style="color:{clr}">{pname}</b></td>'
@@ -1997,14 +2056,14 @@ with comp_tab:
                     textfont=dict(size=10, family="Space Mono, monospace"),
                 ))
             fig_bar.update_layout(
-                paper_bgcolor="#FFFFFF", plot_bgcolor="#FAFFFE",
+                paper_bgcolor="#FFFFFF", plot_bgcolor="#FAFAF8",
                 font=dict(family="Space Mono, monospace", size=11, color="#1a1a1a"),
                 margin=dict(l=55, r=20, t=44, b=90), height=350,
                 barmode="group", bargap=0.28, bargroupgap=0.05,
-                xaxis=dict(showgrid=False, linecolor="#E0DDD6",
+                xaxis=dict(showgrid=False, linecolor="#D6D2CA",
                            tickfont=dict(size=10, family="Space Mono, monospace", color="#444"),
                            tickangle=0),
-                yaxis=dict(showgrid=True, gridcolor="#E8F5E9", ticksuffix="%",
+                yaxis=dict(showgrid=True, gridcolor="#EEEBE4", ticksuffix="%",
                            tickfont=dict(size=10, family="Space Mono, monospace"),
                            title=dict(text="% of Portfolio Value",
                            font=dict(size=10, color="#888", family="Space Mono, monospace"))),
@@ -2079,7 +2138,7 @@ with comp_tab:
 
             fig_rad.update_layout(
                 polar=dict(
-                    bgcolor="#FAFFFE",
+                    bgcolor="#FAFAF8",
                     radialaxis=dict(
                         visible=True,
                         range=[0, 100],
@@ -2094,7 +2153,7 @@ with comp_tab:
                     angularaxis=dict(
                         tickfont=dict(size=11, family="Space Mono, monospace", color="#444"),
                         linecolor="#CCCCCC",
-                        gridcolor="#E8F5E9",
+                        gridcolor="#EEEBE4",
                     ),
                 ),
                 paper_bgcolor="#FFFFFF",
@@ -2174,7 +2233,7 @@ with comp_tab:
             expanded=False,
         ):
             st.markdown(
-                f'''<div style="background:#FAFFFE;border:1px solid #E0DDD6;
+                f'''<div style="background:#FAFAF8;border:1px solid #E0DDD6;
                 padding:4px 20px 4px 20px;">''',
                 unsafe_allow_html=True,
             )
@@ -2182,7 +2241,7 @@ with comp_tab:
                 num = f"0{idx_d+1}" if idx_d < 9 else str(idx_d+1)
                 st.markdown(
                     f'''<div style="display:flex;gap:16px;padding:12px 0;
-                    border-bottom:1px solid #FFFFFF;align-items:flex-start;">
+                    border-bottom:1px solid #F0EDE6;align-items:flex-start;">
                     <span style="font-family:Space Mono,monospace;font-size:0.52rem;
                     color:#CCCCCC;flex-shrink:0;padding-top:3px;">{num}</span>
                     <span style="font-family:Inter,sans-serif;font-size:0.875rem;
@@ -2266,7 +2325,7 @@ with _dd_col_chart:
     # Percentile lines
     for _pv, _pl, _pc in [
         (-_pct50_dd, "Median",  "#888888"),
-        (-_pct95_dd, "95th pctl", "#27AE60"),
+        (-_pct95_dd, "95th pctl", "#C0392B"),
     ]:
         _dd_fig.add_vline(
             x=_pv, line_dash="dash", line_color=_pc, line_width=1.5,
@@ -2276,21 +2335,21 @@ with _dd_col_chart:
         )
 
     _dd_fig.update_layout(
-        paper_bgcolor="#FFFFFF", plot_bgcolor="#FAFFFE",
+        paper_bgcolor="#FFFFFF", plot_bgcolor="#FAFAF8",
         font=dict(family="Space Mono, monospace", size=11, color="#1a1a1a"),
         margin=dict(l=55, r=20, t=20, b=55), height=300,
         showlegend=False,
         xaxis=dict(
             title=dict(text=f"Max Drawdown ($) over {days}-Day Path",
                        font=dict(size=11, color="#888", family="Space Mono, monospace")),
-            showgrid=False, linecolor="#E0DDD6",
+            showgrid=False, linecolor="#D6D2CA",
             tickformat="$,.0f",
             tickfont=dict(size=10, family="Space Mono, monospace", color="#666"),
         ),
         yaxis=dict(
             title=dict(text="Number of Paths",
                        font=dict(size=11, color="#888", family="Space Mono, monospace")),
-            showgrid=True, gridcolor="#E8F5E9",
+            showgrid=True, gridcolor="#EEEBE4",
             tickfont=dict(size=10, family="Space Mono, monospace"),
         ),
     )
@@ -2360,9 +2419,9 @@ with _dd_col_paths:
     # VaR threshold line — dashed red
     _path_fig.add_hline(
         y=-mc_VaR,
-        line_color="#27AE60", line_width=1.5, line_dash="dash",
+        line_color="#C0392B", line_width=1.5, line_dash="dash",
         annotation_text=f"VaR ({confidence_pct}%)  −${mc_VaR:,.0f}",
-        annotation_font=dict(size=9, family="Space Mono, monospace", color="#27AE60"),
+        annotation_font=dict(size=9, family="Space Mono, monospace", color="#C0392B"),
         annotation_position="bottom right",
     )
 
@@ -2377,7 +2436,7 @@ with _dd_col_paths:
 
     _path_fig.update_layout(
         paper_bgcolor="#FFFFFF",
-        plot_bgcolor="#FAFFFE",
+        plot_bgcolor="#FAFAF8",
         font=dict(family="Space Mono, monospace", size=11, color="#1a1a1a"),
         margin=dict(l=65, r=90, t=16, b=60),
         height=380,
@@ -2392,8 +2451,8 @@ with _dd_col_paths:
                 text="Trading Day",
                 font=dict(size=11, color="#888", family="Space Mono, monospace"),
             ),
-            showgrid=True, gridcolor="#E8F5E9",
-            linecolor="#E0DDD6",
+            showgrid=True, gridcolor="#EEEBE4",
+            linecolor="#D6D2CA",
             tickmode="linear", tick0=1,
             dtick=max(1, days // 5),
             tickfont=dict(size=10, family="Space Mono, monospace", color="#555"),
@@ -2403,7 +2462,7 @@ with _dd_col_paths:
                 text="Portfolio P&L ($)",
                 font=dict(size=11, color="#888", family="Space Mono, monospace"),
             ),
-            showgrid=True, gridcolor="#E8F5E9",
+            showgrid=True, gridcolor="#EEEBE4",
             tickformat="$,.0f",
             tickfont=dict(size=10, family="Space Mono, monospace"),
             zeroline=False,
