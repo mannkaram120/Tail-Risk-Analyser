@@ -585,24 +585,26 @@ hr { border:none; border-top:1px solid #D4CFC4; margin:1.2rem 0; }
 /* ── Hide sidebar collapse button (shows "keyboard_double" tooltip in Streamlit 1.55) ── */
 [data-testid="stSidebarCollapseButton"] { display:none !important; }
 
-/* ── Fix expander "arrow_right" Material Icons text overlap — Streamlit 1.55 ── */
-/* The icon is rendered as text using Material Icons font inside <summary>.      */
-/* Setting font-size:0 on summary collapses ALL text to zero, then we restore    */
-/* ── Fix expander "arrow_right" overlap in Streamlit 1.55 ──────────────────── */
-/* font-size:0 on summary kills ALL text including the raw material icon glyph. */
-/* We restore ONLY on <p> and <div> label containers — never on <span>,         */
-/* because the icon lives in a <span> and must stay at size 0.                  */
-[data-testid="stExpander"] summary {
+/* ── Fix expander "arrow_right" Material Icons text overlap ─────────────── */
+/* Higher-specificity selectors ([stMain][stExpander] summary) earlier in     */
+/* this sheet override a bare [stExpander] summary rule, so we must match     */
+/* their specificity by scoping to [stMain] AND [stSidebar].                  */
+/* Strategy: font-size:0 silences icon ligature text; restore on p/div only.  */
+[data-testid="stMain"]    [data-testid="stExpander"] summary,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary {
     display: flex !important;
     align-items: center !important;
     gap: 0 !important;
     font-size: 0 !important;
     line-height: 0 !important;
 }
-/* Restore label — p and div only, never span (icon lives in span) */
-[data-testid="stExpander"] summary p,
-[data-testid="stExpander"] summary > div,
-[data-testid="stExpander"] summary div p {
+/* Restore label text — p and div only; span hosts the icon → stays at 0 */
+[data-testid="stMain"]    [data-testid="stExpander"] summary p,
+[data-testid="stMain"]    [data-testid="stExpander"] summary > div,
+[data-testid="stMain"]    [data-testid="stExpander"] summary div p,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary p,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary > div,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary div p {
     font-size: 0.68rem !important;
     font-family: 'Space Mono', monospace !important;
     letter-spacing: 0.12em !important;
