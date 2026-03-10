@@ -1056,11 +1056,25 @@ def load_market_data(tickers_tuple, lookback_years, days):
     startdate = enddate - dt.timedelta(days=365 * lookback_years)
     adj_close_df = pd.DataFrame()
     for ticker in tickers_tuple:
-        data = yf.download(ticker, start=startdate, end=enddate,
-                           auto_adjust=True, progress=False)
-        if data.empty:
+        try:
+            data = yf.download(ticker, start=startdate, end=enddate,
+                               auto_adjust=True, progress=False,
+                               multi_level_index=False)
+        except TypeError:
+            # older yfinance versions don't support multi_level_index
+            data = yf.download(ticker, start=startdate, end=enddate,
+                               auto_adjust=True, progress=False)
+        if data is None or data.empty:
             return None, f"Could not fetch data for {ticker}. Please check the ticker symbol."
-        _col = data['Close']
+        # Handle both flat and MultiIndex column structures
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = data.columns.droplevel(1)
+        if 'Close' in data.columns:
+            _col = data['Close']
+        elif 'Adj Close' in data.columns:
+            _col = data['Adj Close']
+        else:
+            return None, f"Could not fetch data for {ticker}. Please check the ticker symbol."
         if isinstance(_col, pd.DataFrame):
             _col = _col.iloc[:, 0]
         adj_close_df[ticker] = _col
