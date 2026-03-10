@@ -368,6 +368,9 @@ div[data-testid="stRadio"] [data-testid="stMarkdownContainer"] p {
     color:#555 !important;
     padding:10px 14px !important;
     background:#F9F7F3 !important;
+    display:flex !important;
+    align-items:center !important;
+    gap:8px !important;
 }
 [data-testid="stMain"] [data-testid="stExpander"] summary:hover {
     background:#F0EDE6 !important;
@@ -563,6 +566,9 @@ div[data-testid="stTabs"] [role="tablist"] {
     border: 1px solid #D6D2CA !important;
     border-radius: 0 !important;
     transition: background 0.15s, color 0.15s !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
 }
 [data-testid="stMain"] [data-testid="stExpander"] details[open] > summary {
     background: #EDEAE3 !important;
@@ -581,6 +587,22 @@ div[data-testid="stTabs"] [role="tablist"] {
 #MainMenu, footer, header { visibility:hidden; }
 .block-container { padding-top:1rem !important; padding-bottom:1rem !important; max-width:1200px !important; }
 hr { border:none; border-top:1px solid #D4CFC4; margin:1.2rem 0; }
+
+/* ── Hide sidebar collapse button (shows "keyboard_double" tooltip in Streamlit 1.55) ── */
+[data-testid="stSidebarCollapseButton"] { display:none !important; }
+
+/* ── Fix expander icon: hide the Material icon span that renders as "arrow_right" text ── */
+[data-testid="stExpander"] summary {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+[data-testid="stExpander"] summary svg { display:none !important; }
+[data-testid="stExpander"] summary span[data-testid="stExpanderToggleIcon"] { display:none !important; }
+/* Streamlit 1.55 renders icon as a <span> with material icon text — hide it */
+[data-testid="stExpander"] details summary > span:first-child { display:none !important; }
+[data-testid="stExpander"] summary > div:first-child { display:none !important; }
+[data-testid="stExpander"] summary p { margin:0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
