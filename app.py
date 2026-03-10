@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -559,6 +560,44 @@ hr { border:none; border-top:1px solid #D4CFC4; margin:1.2rem 0; }
 
 </style>
 """, unsafe_allow_html=True)
+
+# ── JS: hide Material Icons ligature text in expander headers ─────────────────
+# CSS cannot fix this — Streamlit's internal stylesheet sets position:absolute
+# on the icon element, taking it out of flex flow regardless of our CSS rules.
+# JS reads the text content of each child and hides only the one containing
+# a Material Icons ligature name (snake_case, no spaces), leaving the label.
+components.html("""
+<script>
+(function(){
+    var ICON = /^[a-z][a-z0-9_]{2,30}$/;  // matches arrow_right, arrow_drop_down etc.
+    function fix(){
+        try {
+            var doc = window.parent.document;
+            doc.querySelectorAll(
+                '[data-testid="stExpander"] summary, '
+                + '[data-testid="stExpander"] details > summary'
+            ).forEach(function(summary){
+                summary.querySelectorAll('span, svg, [data-testid="stExpanderToggleIcon"]')
+                    .forEach(function(el){
+                        var t = (el.textContent || '').trim();
+                        if (el.tagName.toLowerCase() === 'svg' ||
+                            ICON.test(t)) {
+                            el.style.setProperty('display','none','important');
+                        }
+                    });
+            });
+        } catch(e){}
+    }
+    [0, 100, 300, 800, 1500, 3000].forEach(function(d){ setTimeout(fix, d); });
+    try {
+        new MutationObserver(fix).observe(
+            window.parent.document.body,
+            {childList:true, subtree:true}
+        );
+    } catch(e){}
+})();
+</script>
+""", height=0)
 
 # ── Session state ──────────────────────────────────────────────────────────────
 if "tickers" not in st.session_state:
