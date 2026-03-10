@@ -7,10 +7,22 @@ from scipy.stats import norm, gaussian_kde
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os
+import time
 try:
     from dotenv import load_dotenv
-    load_dotenv()  # loads .env file from project directory automatically
+    load_dotenv()
 except ImportError:
+    pass
+
+# ── Render / datacenter IP fix ─────────────────────────────────────────────────
+# yFinance 1.2.0 uses curl_cffi internally — force it to use a browser fingerprint
+# so Yahoo Finance doesn't block datacenter IPs (Render, Railway, Heroku etc.)
+try:
+    from curl_cffi import requests as cffi_requests
+    _YF_SESSION = cffi_requests.Session(impersonate="chrome110")
+    yf.set_config(session=_YF_SESSION)
+except Exception:
+    # curl_cffi not available or set_config unsupported — fall back silently
     pass
 
 # ── Currency detection ─────────────────────────────────────────────────────────
@@ -1056,14 +1068,21 @@ def load_market_data(tickers_tuple, lookback_years, days):
     startdate = enddate - dt.timedelta(days=365 * lookback_years)
     adj_close_df = pd.DataFrame()
     for ticker in tickers_tuple:
-        try:
-            data = yf.download(ticker, start=startdate, end=enddate,
-                               auto_adjust=True, progress=False,
-                               multi_level_index=False)
-        except TypeError:
-            # older yfinance versions don't support multi_level_index
-            data = yf.download(ticker, start=startdate, end=enddate,
-                               auto_adjust=True, progress=False)
+        data = None
+        for _attempt in range(3):
+            try:
+                try:
+                    data = yf.download(ticker, start=startdate, end=enddate,
+                                       auto_adjust=True, progress=False,
+                                       multi_level_index=False)
+                except TypeError:
+                    data = yf.download(ticker, start=startdate, end=enddate,
+                                       auto_adjust=True, progress=False)
+                if data is not None and not data.empty:
+                    break
+            except Exception:
+                pass
+            time.sleep(2 * (_attempt + 1))
         if data is None or data.empty:
             return None, f"Could not fetch data for {ticker}. Please check the ticker symbol."
         # Handle both flat and MultiIndex column structures
@@ -1508,13 +1527,23 @@ def compute_sensitivity_matrix(tickers_tuple, weights_tuple, portfolio_value,
     startdate = enddate - dt.timedelta(days=365 * max_lookback + 30)
     frames = {}
     for ticker in tickers_tuple:
-        try:
-            data = yf.download(ticker, start=startdate, end=enddate,
-                               auto_adjust=True, progress=False,
-                               multi_level_index=False)
-        except TypeError:
-            data = yf.download(ticker, start=startdate, end=enddate,
-                               auto_adjust=True, progress=False)
+        data = None
+        for _attempt in range(3):
+            try:
+                try:
+                    data = yf.download(ticker, start=startdate, end=enddate,
+                                       auto_adjust=True, progress=False,
+                                       multi_level_index=False)
+                except TypeError:
+                    data = yf.download(ticker, start=startdate, end=enddate,
+                                       auto_adjust=True, progress=False)
+                if data is not None and not data.empty:
+                    break
+            except Exception:
+                pass
+            time.sleep(2 * (_attempt + 1))
+        if data is None or data.empty:
+            return {}
         if isinstance(data.columns, pd.MultiIndex):
             data.columns = data.columns.droplevel(1)
         if 'Close' in data.columns:
