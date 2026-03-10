@@ -585,21 +585,35 @@ hr { border:none; border-top:1px solid #D4CFC4; margin:1.2rem 0; }
 /* ── Hide sidebar collapse button (shows "keyboard_double" tooltip in Streamlit 1.55) ── */
 [data-testid="stSidebarCollapseButton"] { display:none !important; }
 
-/* ── Fix expander "arrow_right" text overlap in Streamlit 1.55 ── */
-/* Make summary a flex row so icon and label sit side by side, not on top */
+/* ── Fix expander "arrow_right" Material Icons text overlap — Streamlit 1.55 ── */
+/* The icon is rendered as text using Material Icons font inside <summary>.      */
+/* Setting font-size:0 on summary collapses ALL text to zero, then we restore    */
+/* ── Fix expander "arrow_right" overlap in Streamlit 1.55 ──────────────────── */
+/* The material icon "arrow_right" is a raw text node / font-rendered char.    */
+/* Setting font-size:0 on summary collapses ALL text including the icon,       */
+/* then we restore font-size only on the actual label containers.              */
 [data-testid="stExpander"] summary {
     display: flex !important;
     align-items: center !important;
-    gap: 6px !important;
+    gap: 0 !important;
+    font-size: 0 !important;
+    line-height: 0 !important;
 }
-/* Hide the SVG arrow icon (older Streamlit versions) */
+/* Restore label text — cover every tag Streamlit might use for the label */
+[data-testid="stExpander"] summary p,
+[data-testid="stExpander"] summary span:not([data-testid="stExpanderToggleIcon"]),
+[data-testid="stExpander"] summary div > p,
+[data-testid="stExpander"] summary > div:last-child {
+    font-size: 0.68rem !important;
+    font-family: 'Space Mono', monospace !important;
+    letter-spacing: 0.12em !important;
+    color: #555 !important;
+    margin: 0 !important;
+    line-height: 1.4 !important;
+}
+/* Hide SVG arrow and toggle icon span entirely */
 [data-testid="stExpander"] summary svg { display:none !important; }
-/* Hide the toggle icon span (older Streamlit versions) */
 [data-testid="stExpander"] summary span[data-testid="stExpanderToggleIcon"] { display:none !important; }
-/* Streamlit 1.55: material icon rendered as a <span> with font-family "Material Icons" */
-[data-testid="stExpander"] summary span[style*="Material"] { display:none !important; }
-/* Zero out margin on label paragraph inside summary */
-[data-testid="stExpander"] summary p { margin:0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
