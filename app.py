@@ -1164,14 +1164,14 @@ with c1:
     st.markdown(f"""
     <div class="metric-card metric-var">
         <div class="metric-label">Value at Risk ({confidence_pct}%)</div>
-        <div class="metric-value">${display_VaR:,.0f}</div>
+        <div class="metric-value">{curr_sym}{display_VaR:,.0f}</div>
         <div class="metric-sub">{days}-day horizon</div>
     </div>""", unsafe_allow_html=True)
 with c2:
     st.markdown(f"""
     <div class="metric-card metric-es">
         <div class="metric-label">Expected Shortfall ({confidence_pct}%)</div>
-        <div class="metric-value">${display_ES:,.0f}</div>
+        <div class="metric-value">{curr_sym}{display_ES:,.0f}</div>
         <div class="metric-sub">avg loss beyond VaR</div>
     </div>""", unsafe_allow_html=True)
 with c3:
@@ -1241,14 +1241,14 @@ if method == "All (Compare)":
     fig_bar.add_trace(go.Bar(
         name=f"VaR ({confidence_pct}%)", x=methods_list, y=var_vals,
         marker_color=C_VAR, marker_line=dict(color="#8B1A1A", width=1),
-        text=[f"<b>${v:,.0f}</b>" for v in var_vals],
+        text=[f"<b>{curr_sym}{v:,.0f}</b>" for v in var_vals],
         textposition="outside",
         textfont=dict(size=13, family="Space Mono, monospace", color="#1a1a1a"),
     ))
     fig_bar.add_trace(go.Bar(
         name=f"ES ({confidence_pct}%)", x=methods_list, y=es_vals,
         marker_color=C_ES, marker_line=dict(color="#4A0E0E", width=1),
-        text=[f"<b>${v:,.0f}</b>" for v in es_vals],
+        text=[f"<b>{curr_sym}{v:,.0f}</b>" for v in es_vals],
         textposition="outside",
         textfont=dict(size=13, family="Space Mono, monospace", color="#1a1a1a"),
     ))
@@ -1508,9 +1508,21 @@ def compute_sensitivity_matrix(tickers_tuple, weights_tuple, portfolio_value,
     startdate = enddate - dt.timedelta(days=365 * max_lookback + 30)
     frames = {}
     for ticker in tickers_tuple:
-        data = yf.download(ticker, start=startdate, end=enddate,
-                           auto_adjust=False, progress=False)
-        col = data["Adj Close"]
+        try:
+            data = yf.download(ticker, start=startdate, end=enddate,
+                               auto_adjust=True, progress=False,
+                               multi_level_index=False)
+        except TypeError:
+            data = yf.download(ticker, start=startdate, end=enddate,
+                               auto_adjust=True, progress=False)
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = data.columns.droplevel(1)
+        if 'Close' in data.columns:
+            col = data['Close']
+        elif 'Adj Close' in data.columns:
+            col = data['Adj Close']
+        else:
+            return {}
         if isinstance(col, pd.DataFrame):
             col = col.iloc[:, 0]
         frames[ticker] = col
@@ -1834,7 +1846,7 @@ for tab, lb in zip(lb_tabs, SA_LOOKBACKS):
                     v   = res_dict[(lb, h, c)][metric]
                     pct = (v - vmin)/(vmax - vmin) if vmax != vmin else 0
                     a   = 0.05 + pct * 0.22
-                    html += f'<td style="background:{rgba.format(a=a)}">${v:,.0f}</td>'
+                    html += f'<td style="background:{rgba.format(a=a)}">{curr_sym}{v:,.0f}</td>'
                 html += '</tr>'
             html += '</tbody></table>'
             return html
@@ -1934,16 +1946,16 @@ for tab, lb in zip(lb_tabs, SA_LOOKBACKS):
     <div style="display:grid;grid-template-columns:repeat(4,1fr);">
       <div><p style="font-family:Space Mono,monospace;font-size:0.57rem;color:#999;margin:0 0 3px 0;">1D</p>
            <p style="font-family:Space Mono,monospace;font-size:0.82rem;
-                     font-weight:700;color:#1a1a1a;margin:0;">${_v1:,.0f}</p></div>
+                     font-weight:700;color:#1a1a1a;margin:0;">{curr_sym}{_v1:,.0f}</p></div>
       <div><p style="font-family:Space Mono,monospace;font-size:0.57rem;color:#999;margin:0 0 3px 0;">5D</p>
            <p style="font-family:Space Mono,monospace;font-size:0.82rem;
-                     font-weight:700;color:#1a1a1a;margin:0;">${_v5:,.0f}</p></div>
+                     font-weight:700;color:#1a1a1a;margin:0;">{curr_sym}{_v5:,.0f}</p></div>
       <div><p style="font-family:Space Mono,monospace;font-size:0.57rem;color:#999;margin:0 0 3px 0;">10D</p>
            <p style="font-family:Space Mono,monospace;font-size:0.82rem;
-                     font-weight:700;color:#1a1a1a;margin:0;">${_v10:,.0f}</p></div>
+                     font-weight:700;color:#1a1a1a;margin:0;">{curr_sym}{_v10:,.0f}</p></div>
       <div><p style="font-family:Space Mono,monospace;font-size:0.57rem;color:#999;margin:0 0 3px 0;">20D</p>
            <p style="font-family:Space Mono,monospace;font-size:0.82rem;
-                     font-weight:700;color:#1a1a1a;margin:0;">${_v20:,.0f}</p></div>
+                     font-weight:700;color:#1a1a1a;margin:0;">{curr_sym}{_v20:,.0f}</p></div>
     </div>
   </div>
 
@@ -2031,7 +2043,7 @@ with comp_tab:
 
             tbl += (f'<tr>'
                     f'<td><b style="color:{clr}">{pname}</b></td>'
-                    f'<td style="color:#888">${m["pval"]:,.0f}</td>'
+                    f'<td style="color:#888">{curr_sym}{m["pval"]:,.0f}</td>'
                     f'<td>{m["stress_var_pct"]:.2f}%{delta_stress}</td>'
                     f'<td>{m["avg_var_pct"]:.2f}%{delta_avg}</td>'
                     f'<td>{m["std_var_pct"]:.2f}%</td>'
@@ -2214,7 +2226,7 @@ with comp_tab:
                     f'<p style="font-family:Space Mono,monospace;font-size:0.62rem;' +
                     f'font-weight:700;color:{clr};margin:0 0 4px 0;">{pname}</p>' +
                     f'<p style="font-family:Space Mono,monospace;font-size:0.56rem;' +
-                    f'color:#AAA;margin:0 0 6px 0;">${pv:,.0f} portfolio</p>',
+                    f'color:#AAA;margin:0 0 6px 0;">{curr_sym}{pv:,.0f} portfolio</p>',
                     unsafe_allow_html=True)
                 html  = '<table class="compare-table" style="font-size:0.66rem;width:100%;">'
                 html += '<thead><tr><th>H↓/C→</th>'
@@ -2229,7 +2241,7 @@ with comp_tab:
                         a = 0.05 + pct_norm * 0.25
                         html += (f'<td style="background:rgba({r_c},{g_c},{b_c},{a:.2f})">' +
                                  f'<span style="font-size:0.64rem">{v_pct:.2f}%</span>' +
-                                 f'<br><span style="font-size:0.56rem;color:#888">${v_abs:,.0f}</span></td>')
+                                 f'<br><span style="font-size:0.56rem;color:#888">{curr_sym}{v_abs:,.0f}</span></td>')
                     html += '</tr>'
                 html += '</tbody></table>'
                 col_h.markdown(html, unsafe_allow_html=True)
