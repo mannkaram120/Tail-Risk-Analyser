@@ -368,6 +368,9 @@ div[data-testid="stRadio"] [data-testid="stMarkdownContainer"] p {
     color:#555 !important;
     padding:10px 14px !important;
     background:#F9F7F3 !important;
+    display:flex !important;
+    align-items:center !important;
+    gap:8px !important;
 }
 [data-testid="stMain"] [data-testid="stExpander"] summary:hover {
     background:#F0EDE6 !important;
@@ -545,38 +548,6 @@ div[data-testid="stTabs"] [role="tablist"] {
 /* ══ INFO BOX ══════════════════════════════════════════════════════════════ */
 .info-box { background:#F9F7F3; border-left:2px solid #888; padding:12px 16px; font-size:0.75rem; color:#555; margin:12px 0; font-family:'Inter',sans-serif; line-height:1.7; }
 
-/* ── Collapsible Interpretation / Diagnostic expanders ───────────────────── */
-[data-testid="stMain"] [data-testid="stExpander"] details {
-    border: none !important;
-    background: transparent !important;
-    margin-bottom: 4px !important;
-}
-[data-testid="stMain"] [data-testid="stExpander"] details summary {
-    font-family: 'Space Mono', monospace !important;
-    font-size: 0.60rem !important;
-    font-weight: 400 !important;
-    letter-spacing: 0.16em !important;
-    color: #888 !important;
-    text-transform: uppercase !important;
-    padding: 11px 18px !important;
-    background: #F5F2EB !important;
-    border: 1px solid #D6D2CA !important;
-    border-radius: 0 !important;
-    transition: background 0.15s, color 0.15s !important;
-}
-[data-testid="stMain"] [data-testid="stExpander"] details[open] > summary {
-    background: #EDEAE3 !important;
-    color: #1a1a1a !important;
-    border-bottom: 2px solid #1a1a1a !important;
-}
-[data-testid="stMain"] [data-testid="stExpander"] details summary:hover {
-    background: #EDEAE3 !important;
-    color: #1a1a1a !important;
-}
-[data-testid="stMain"] [data-testid="stExpander"] details > div > div {
-    padding: 0 !important;
-}
-
 /* ══ MISC ══════════════════════════════════════════════════════════════════ */
 #MainMenu, footer, header { visibility:hidden; }
 .block-container { padding-top:1rem !important; padding-bottom:1rem !important; max-width:1200px !important; }
@@ -585,19 +556,7 @@ hr { border:none; border-top:1px solid #D4CFC4; margin:1.2rem 0; }
 /* ── Hide sidebar collapse button (shows "keyboard_double" tooltip in Streamlit 1.55) ── */
 [data-testid="stSidebarCollapseButton"] { display:none !important; }
 
-/* ── Fix expander "arrow_right" icon overlap ────────────────────────────── */
-/* Strategy: do NOT touch font-size on summary at all — the rules earlier in  */
-/* this sheet already render the label correctly. Only hide the icon element. */
-/* The icon is a direct <span> child of <summary>; the label text is always   */
-/* inside a <div> (or div>p), so hiding summary>span is safe for all versions.*/
-[data-testid="stExpander"] summary > span,
-[data-testid="stExpander"] details summary > span,
-[data-testid="stExpander"] summary > button > span,
-[data-testid="stExpanderToggleIcon"],
-[data-testid="stExpander"] summary .material-icons,
-[data-testid="stExpander"] summary .material-symbols-outlined,
-[data-testid="stExpander"] summary svg,
-[data-testid="stExpander"] details summary svg { display: none !important; }
+
 </style>
 """, unsafe_allow_html=True)
 
