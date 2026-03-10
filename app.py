@@ -589,9 +589,9 @@ hr { border:none; border-top:1px solid #D4CFC4; margin:1.2rem 0; }
 /* The icon is rendered as text using Material Icons font inside <summary>.      */
 /* Setting font-size:0 on summary collapses ALL text to zero, then we restore    */
 /* ── Fix expander "arrow_right" overlap in Streamlit 1.55 ──────────────────── */
-/* The material icon "arrow_right" is a raw text node / font-rendered char.    */
-/* Setting font-size:0 on summary collapses ALL text including the icon,       */
-/* then we restore font-size only on the actual label containers.              */
+/* font-size:0 on summary kills ALL text including the raw material icon glyph. */
+/* We restore ONLY on <p> and <div> label containers — never on <span>,         */
+/* because the icon lives in a <span> and must stay at size 0.                  */
 [data-testid="stExpander"] summary {
     display: flex !important;
     align-items: center !important;
@@ -599,11 +599,10 @@ hr { border:none; border-top:1px solid #D4CFC4; margin:1.2rem 0; }
     font-size: 0 !important;
     line-height: 0 !important;
 }
-/* Restore label text — cover every tag Streamlit might use for the label */
+/* Restore label — p and div only, never span (icon lives in span) */
 [data-testid="stExpander"] summary p,
-[data-testid="stExpander"] summary span:not([data-testid="stExpanderToggleIcon"]),
-[data-testid="stExpander"] summary div > p,
-[data-testid="stExpander"] summary > div:last-child {
+[data-testid="stExpander"] summary > div,
+[data-testid="stExpander"] summary div p {
     font-size: 0.68rem !important;
     font-family: 'Space Mono', monospace !important;
     letter-spacing: 0.12em !important;
