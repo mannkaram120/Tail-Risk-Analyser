@@ -368,9 +368,6 @@ div[data-testid="stRadio"] [data-testid="stMarkdownContainer"] p {
     color:#555 !important;
     padding:10px 14px !important;
     background:#F9F7F3 !important;
-    display:flex !important;
-    align-items:center !important;
-    gap:8px !important;
 }
 [data-testid="stMain"] [data-testid="stExpander"] summary:hover {
     background:#F0EDE6 !important;
@@ -566,9 +563,6 @@ div[data-testid="stTabs"] [role="tablist"] {
     border: 1px solid #D6D2CA !important;
     border-radius: 0 !important;
     transition: background 0.15s, color 0.15s !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 8px !important;
 }
 [data-testid="stMain"] [data-testid="stExpander"] details[open] > summary {
     background: #EDEAE3 !important;
@@ -591,17 +585,20 @@ hr { border:none; border-top:1px solid #D4CFC4; margin:1.2rem 0; }
 /* ── Hide sidebar collapse button (shows "keyboard_double" tooltip in Streamlit 1.55) ── */
 [data-testid="stSidebarCollapseButton"] { display:none !important; }
 
-/* ── Fix expander icon: hide the Material icon span that renders as "arrow_right" text ── */
+/* ── Fix expander "arrow_right" text overlap in Streamlit 1.55 ── */
+/* Make summary a flex row so icon and label sit side by side, not on top */
 [data-testid="stExpander"] summary {
     display: flex !important;
     align-items: center !important;
-    gap: 8px !important;
+    gap: 6px !important;
 }
+/* Hide the SVG arrow icon (older Streamlit versions) */
 [data-testid="stExpander"] summary svg { display:none !important; }
+/* Hide the toggle icon span (older Streamlit versions) */
 [data-testid="stExpander"] summary span[data-testid="stExpanderToggleIcon"] { display:none !important; }
-/* Streamlit 1.55 renders icon as a <span> with material icon text — hide it */
-[data-testid="stExpander"] details summary > span:first-child { display:none !important; }
-[data-testid="stExpander"] summary > div:first-child { display:none !important; }
+/* Streamlit 1.55: material icon rendered as a <span> with font-family "Material Icons" */
+[data-testid="stExpander"] summary span[style*="Material"] { display:none !important; }
+/* Zero out margin on label paragraph inside summary */
 [data-testid="stExpander"] summary p { margin:0 !important; }
 </style>
 """, unsafe_allow_html=True)
