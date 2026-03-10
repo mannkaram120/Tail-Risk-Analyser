@@ -586,11 +586,16 @@ hr { border:none; border-top:1px solid #D4CFC4; margin:1.2rem 0; }
 [data-testid="stSidebarCollapseButton"] { display:none !important; }
 
 /* ── Fix expander "arrow_right" Material Icons text overlap ─────────────── */
-/* Higher-specificity selectors ([stMain][stExpander] summary) earlier in     */
-/* this sheet override a bare [stExpander] summary rule, so we must match     */
-/* their specificity by scoping to [stMain] AND [stSidebar].                  */
-/* Strategy: font-size:0 silences icon ligature text; restore on p/div only.  */
+/* ROOT CAUSE 1: [stMain][stExpander] details summary has specificity [0,2,2] */
+/* which beats [stMain][stExpander] summary at [0,2,1] even with !important.  */
+/* FIX: include "details" in selector to reach [0,2,2] on both stMain/stSide. */
+/* ROOT CAUSE 2: icon may be a plain <span> with no data-testid in the        */
+/* deployed Streamlit version — the previous span[data-testid=...] rule was   */
+/* matching nothing. FIX: hide ALL direct-child spans of summary; label text  */
+/* is always rendered inside div > p (never a bare span), so this is safe.    */
+[data-testid="stMain"]    [data-testid="stExpander"] details summary,
 [data-testid="stMain"]    [data-testid="stExpander"] summary,
+[data-testid="stSidebar"] [data-testid="stExpander"] details summary,
 [data-testid="stSidebar"] [data-testid="stExpander"] summary {
     display: flex !important;
     align-items: center !important;
@@ -598,10 +603,16 @@ hr { border:none; border-top:1px solid #D4CFC4; margin:1.2rem 0; }
     font-size: 0 !important;
     line-height: 0 !important;
 }
-/* Restore label text — p and div only; span hosts the icon → stays at 0 */
+/* Restore label text — p and div only; spans/icons stay at font-size:0 */
+[data-testid="stMain"]    [data-testid="stExpander"] details summary p,
+[data-testid="stMain"]    [data-testid="stExpander"] details summary > div,
+[data-testid="stMain"]    [data-testid="stExpander"] details summary div p,
 [data-testid="stMain"]    [data-testid="stExpander"] summary p,
 [data-testid="stMain"]    [data-testid="stExpander"] summary > div,
 [data-testid="stMain"]    [data-testid="stExpander"] summary div p,
+[data-testid="stSidebar"] [data-testid="stExpander"] details summary p,
+[data-testid="stSidebar"] [data-testid="stExpander"] details summary > div,
+[data-testid="stSidebar"] [data-testid="stExpander"] details summary div p,
 [data-testid="stSidebar"] [data-testid="stExpander"] summary p,
 [data-testid="stSidebar"] [data-testid="stExpander"] summary > div,
 [data-testid="stSidebar"] [data-testid="stExpander"] summary div p {
@@ -612,9 +623,14 @@ hr { border:none; border-top:1px solid #D4CFC4; margin:1.2rem 0; }
     margin: 0 !important;
     line-height: 1.4 !important;
 }
-/* Hide SVG arrow and toggle icon span entirely */
-[data-testid="stExpander"] summary svg { display:none !important; }
-[data-testid="stExpander"] summary span[data-testid="stExpanderToggleIcon"] { display:none !important; }
+/* Hide icon — covers: plain spans, spans with data-testid, Material Icons    */
+/* class, SVGs — all direct children of summary. Label is in div>p, not span. */
+[data-testid="stExpander"] summary > span,
+[data-testid="stExpander"] details summary > span,
+[data-testid="stExpander"] summary svg,
+[data-testid="stExpander"] details summary svg,
+[data-testid="stExpander"] summary .material-icons,
+[data-testid="stExpander"] summary .material-symbols-outlined { display:none !important; }
 </style>
 """, unsafe_allow_html=True)
 
