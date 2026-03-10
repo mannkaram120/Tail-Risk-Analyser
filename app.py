@@ -1057,10 +1057,10 @@ def load_market_data(tickers_tuple, lookback_years, days):
     adj_close_df = pd.DataFrame()
     for ticker in tickers_tuple:
         data = yf.download(ticker, start=startdate, end=enddate,
-                           auto_adjust=False, progress=False)
+                           auto_adjust=True, progress=False)
         if data.empty:
             return None, f"Could not fetch data for {ticker}. Please check the ticker symbol."
-        _col = data['Adj Close']
+        _col = data['Close']
         if isinstance(_col, pd.DataFrame):
             _col = _col.iloc[:, 0]
         adj_close_df[ticker] = _col
