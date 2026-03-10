@@ -585,52 +585,19 @@ hr { border:none; border-top:1px solid #D4CFC4; margin:1.2rem 0; }
 /* ── Hide sidebar collapse button (shows "keyboard_double" tooltip in Streamlit 1.55) ── */
 [data-testid="stSidebarCollapseButton"] { display:none !important; }
 
-/* ── Fix expander "arrow_right" Material Icons text overlap ─────────────── */
-/* ROOT CAUSE 1: [stMain][stExpander] details summary has specificity [0,2,2] */
-/* which beats [stMain][stExpander] summary at [0,2,1] even with !important.  */
-/* FIX: include "details" in selector to reach [0,2,2] on both stMain/stSide. */
-/* ROOT CAUSE 2: icon may be a plain <span> with no data-testid in the        */
-/* deployed Streamlit version — the previous span[data-testid=...] rule was   */
-/* matching nothing. FIX: hide ALL direct-child spans of summary; label text  */
-/* is always rendered inside div > p (never a bare span), so this is safe.    */
-[data-testid="stMain"]    [data-testid="stExpander"] details summary,
-[data-testid="stMain"]    [data-testid="stExpander"] summary,
-[data-testid="stSidebar"] [data-testid="stExpander"] details summary,
-[data-testid="stSidebar"] [data-testid="stExpander"] summary {
-    display: flex !important;
-    align-items: center !important;
-    gap: 0 !important;
-    font-size: 0 !important;
-    line-height: 0 !important;
-}
-/* Restore label text — p and div only; spans/icons stay at font-size:0 */
-[data-testid="stMain"]    [data-testid="stExpander"] details summary p,
-[data-testid="stMain"]    [data-testid="stExpander"] details summary > div,
-[data-testid="stMain"]    [data-testid="stExpander"] details summary div p,
-[data-testid="stMain"]    [data-testid="stExpander"] summary p,
-[data-testid="stMain"]    [data-testid="stExpander"] summary > div,
-[data-testid="stMain"]    [data-testid="stExpander"] summary div p,
-[data-testid="stSidebar"] [data-testid="stExpander"] details summary p,
-[data-testid="stSidebar"] [data-testid="stExpander"] details summary > div,
-[data-testid="stSidebar"] [data-testid="stExpander"] details summary div p,
-[data-testid="stSidebar"] [data-testid="stExpander"] summary p,
-[data-testid="stSidebar"] [data-testid="stExpander"] summary > div,
-[data-testid="stSidebar"] [data-testid="stExpander"] summary div p {
-    font-size: 0.68rem !important;
-    font-family: 'Space Mono', monospace !important;
-    letter-spacing: 0.12em !important;
-    color: #555 !important;
-    margin: 0 !important;
-    line-height: 1.4 !important;
-}
-/* Hide icon — covers: plain spans, spans with data-testid, Material Icons    */
-/* class, SVGs — all direct children of summary. Label is in div>p, not span. */
+/* ── Fix expander "arrow_right" icon overlap ────────────────────────────── */
+/* Strategy: do NOT touch font-size on summary at all — the rules earlier in  */
+/* this sheet already render the label correctly. Only hide the icon element. */
+/* The icon is a direct <span> child of <summary>; the label text is always   */
+/* inside a <div> (or div>p), so hiding summary>span is safe for all versions.*/
 [data-testid="stExpander"] summary > span,
 [data-testid="stExpander"] details summary > span,
-[data-testid="stExpander"] summary svg,
-[data-testid="stExpander"] details summary svg,
+[data-testid="stExpander"] summary > button > span,
+[data-testid="stExpanderToggleIcon"],
 [data-testid="stExpander"] summary .material-icons,
-[data-testid="stExpander"] summary .material-symbols-outlined { display:none !important; }
+[data-testid="stExpander"] summary .material-symbols-outlined,
+[data-testid="stExpander"] summary svg,
+[data-testid="stExpander"] details summary svg { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
