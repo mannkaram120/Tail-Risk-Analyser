@@ -7,26 +7,29 @@ from scipy.stats import norm, gaussian_kde
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os
-import requests
-import time
-
-# ── Cloud deployment fix (Render / Heroku / AWS etc.) ─────────────────────────
-# Yahoo Finance blocks requests from datacenter IPs without a browser User-Agent.
-# Patch the yfinance session once at startup so all downloads use it.
 try:
-    _yf_session = requests.Session()
-    _yf_session.headers.update({
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-    })
-    yf.set_config(session=_yf_session)
-except Exception:
-    pass  # silently fall back if yfinance version doesn't support set_config
+    from dotenv import load_dotenv
+    load_dotenv()  # loads .env file from project directory automatically
+except ImportError:
+    pass
+
+# ── Currency detection ─────────────────────────────────────────────────────────
+def detect_currency(tickers):
+    """
+    Returns (symbol, label, is_mixed) based on ticker suffixes.
+    - All .NS / .BO  → INR  ₹
+    - All no suffix  → USD  $
+    - Mixed          → MIXED warning
+    """
+    if not tickers:
+        return "$", "USD", False
+    indian  = [t for t in tickers if t.upper().endswith(".NS") or t.upper().endswith(".BO")]
+    foreign = [t for t in tickers if not (t.upper().endswith(".NS") or t.upper().endswith(".BO"))]
+    if indian and foreign:
+        return "$", "MIXED", True      # mixed — flag it
+    if indian and not foreign:
+        return "₹", "INR", False
+    return "$", "USD", False
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -289,7 +292,7 @@ div[data-testid="stRadio"] [data-testid="stMarkdownContainer"] p {
     gap:2px !important;
 }
 
-/* ══ EXPANDERS — main content ═══════════════════════════════════════════════ */
+/* ══ EXPANDERS — main content: normal boxes ════════════════════════════════ */
 [data-testid="stMain"] [data-testid="stExpander"] {
     border:1px solid #D6D2CA !important;
     border-radius:4px !important;
@@ -303,13 +306,14 @@ div[data-testid="stRadio"] [data-testid="stMarkdownContainer"] p {
     color:#555 !important;
     padding:10px 14px !important;
     background:#F9F7F3 !important;
-    display:flex !important;
-    align-items:center !important;
-    gap:8px !important;
 }
 [data-testid="stMain"] [data-testid="stExpander"] summary:hover {
     background:#F0EDE6 !important;
     color:#1a1a1a !important;
+}
+[data-testid="stMain"] [data-testid="stExpander"] * {
+    color:#1a1a1a !important;
+    font-family:'Space Mono',monospace !important;
 }
 [data-testid="stMain"] [data-testid="stExpander"] > div > div {
     padding:14px 16px !important;
@@ -479,7 +483,37 @@ div[data-testid="stTabs"] [role="tablist"] {
 /* ══ INFO BOX ══════════════════════════════════════════════════════════════ */
 .info-box { background:#F9F7F3; border-left:2px solid #888; padding:12px 16px; font-size:0.75rem; color:#555; margin:12px 0; font-family:'Inter',sans-serif; line-height:1.7; }
 
-
+/* ── Collapsible Interpretation / Diagnostic expanders ───────────────────── */
+[data-testid="stMain"] [data-testid="stExpander"] details {
+    border: none !important;
+    background: transparent !important;
+    margin-bottom: 4px !important;
+}
+[data-testid="stMain"] [data-testid="stExpander"] details summary {
+    font-family: 'Space Mono', monospace !important;
+    font-size: 0.60rem !important;
+    font-weight: 400 !important;
+    letter-spacing: 0.16em !important;
+    color: #888 !important;
+    text-transform: uppercase !important;
+    padding: 11px 18px !important;
+    background: #F5F2EB !important;
+    border: 1px solid #D6D2CA !important;
+    border-radius: 0 !important;
+    transition: background 0.15s, color 0.15s !important;
+}
+[data-testid="stMain"] [data-testid="stExpander"] details[open] > summary {
+    background: #EDEAE3 !important;
+    color: #1a1a1a !important;
+    border-bottom: 2px solid #1a1a1a !important;
+}
+[data-testid="stMain"] [data-testid="stExpander"] details summary:hover {
+    background: #EDEAE3 !important;
+    color: #1a1a1a !important;
+}
+[data-testid="stMain"] [data-testid="stExpander"] details > div > div {
+    padding: 0 !important;
+}
 
 /* ══ MISC ══════════════════════════════════════════════════════════════════ */
 #MainMenu, footer, header { visibility:hidden; }
@@ -506,7 +540,7 @@ C_BG      = "#FFFFFF"
 C_PLOTBG  = "#FAFAF8"
 
 # ── Base Plotly layout ─────────────────────────────────────────────────────────
-def base_layout(title_text, x_title, height=360):
+def base_layout(title_text, x_title, height=360, curr_sym="$"):
     return dict(
         paper_bgcolor="#FFFFFF",
         plot_bgcolor="#F8F9FA",
@@ -524,7 +558,7 @@ def base_layout(title_text, x_title, height=360):
             zeroline=False,
             showline=True, linecolor="#CCCCCC", linewidth=1,
             tickfont=dict(size=12, color="#333333"),
-            tickprefix="$", tickformat=",.0f",
+            tickprefix=curr_sym, tickformat=",.0f",
             showspikes=False,
             mirror=False,
             ticks="outside",
@@ -560,6 +594,7 @@ def build_risk_chart(
     x_label, days, confidence_pct,
     kde_overlay=True, normal_curve=False,
     portfolio_mean=None, portfolio_std_dev=None, portfolio_value=None,
+    curr_sym="$",
 ):
     """
     Professional risk chart:
@@ -583,7 +618,7 @@ def build_risk_chart(
         marker=dict(color=C_HIST, line=dict(color="#999", width=0.4)),
         opacity=0.75,
         name="P&L Distribution",
-        hovertemplate="P&L: $%{x:,.0f}<br>Density: %{y:.6f}<extra></extra>",
+        hovertemplate=f"P&L: {curr_sym}%{{x:,.0f}}<br>Density: %{{y:.6f}}<extra></extra>",
     ))
 
     # 2. Tail region — soft red overlay histogram
@@ -596,7 +631,7 @@ def build_risk_chart(
             marker=dict(color=C_TAIL, line=dict(color="rgba(192,57,43,0.5)", width=0.4)),
             opacity=1.0,
             name="Tail Region",
-            hovertemplate="Loss: $%{x:,.0f}<br>Density: %{y:.6f}<extra></extra>",
+            hovertemplate=f"Loss: {curr_sym}%{{x:,.0f}}<br>Density: %{{y:.6f}}<extra></extra>",
         ))
 
     # 3. KDE overlay — smooth density curve
@@ -643,8 +678,8 @@ def build_risk_chart(
     vol_pct  = (portfolio_std_dev * 100) if portfolio_std_dev is not None else 0
 
     summary = (
-        f"<b>{days}-Day VaR ({confidence_pct}%):   ${var_val:>10,.0f}</b><br>"
-        f"<b>{days}-Day ES  ({confidence_pct}%):   ${es_val:>10,.0f}</b>"
+        f"<b>{days}-Day VaR ({confidence_pct}%):   {curr_sym}{var_val:>10,.0f}</b><br>"
+        f"<b>{days}-Day ES  ({confidence_pct}%):   {curr_sym}{es_val:>10,.0f}</b>"
     )
     if portfolio_mean is not None:
         summary += (
@@ -668,7 +703,7 @@ def build_risk_chart(
         opacity=0.97,
     )
 
-    layout = base_layout(title, x_label)
+    layout = base_layout(title, x_label, curr_sym=curr_sym)
     fig.update_layout(**layout)
     return fig
 
@@ -792,9 +827,22 @@ with st.sidebar:
 
     if st.session_state["sb_params"]:
         st.markdown("<div style='margin-top:8px'></div>", unsafe_allow_html=True)
+        _curr_sym, _curr_label, _curr_mixed = detect_currency(list(st.session_state.tickers))
+        if _curr_mixed:
+            st.markdown(
+                "<div style='font-family:Space Mono,monospace;font-size:0.60rem;"
+                "color:#C0392B;background:#FDF0EE;border:1px solid #F5C6C0;"
+                "padding:8px 10px;margin-bottom:8px;letter-spacing:0.06em;'>"
+                "⚠ MIXED CURRENCIES DETECTED<br>"
+                "<span style='color:#888;font-size:0.55rem;'>"
+                "Indian (.NS/.BO) and non-Indian tickers cannot be combined — "
+                "INR and USD returns are not directly comparable. "
+                "Use separate portfolios for accurate results.</span></div>",
+                unsafe_allow_html=True
+            )
         portfolio_value = st.number_input(
-            "Portfolio Value ($)",
-            min_value=1000, max_value=10_000_000,
+            f"Portfolio Value ({_curr_sym})",
+            min_value=1000, max_value=500_000_000,
             value=100_000, step=10_000,
         )
 
@@ -955,6 +1003,9 @@ with st.sidebar:
     st.markdown("<div style='margin-top:20px'></div>", unsafe_allow_html=True)
     run = st.button("CALCULATE RISK", key="run_btn", use_container_width=True)
 
+# ── Currency symbol (derived from current tickers) ────────────────────────────
+curr_sym, _curr_label, _curr_mixed = detect_currency(list(st.session_state.get("tickers", [])))
+
 # ── Main header ────────────────────────────────────────────────────────────────
 st.markdown("""
 <p class="section-label">// Quantitative Risk Tool</p>
@@ -1005,16 +1056,8 @@ def load_market_data(tickers_tuple, lookback_years, days):
     startdate = enddate - dt.timedelta(days=365 * lookback_years)
     adj_close_df = pd.DataFrame()
     for ticker in tickers_tuple:
-        data = pd.DataFrame()
-        for _attempt in range(3):          # retry up to 3 times
-            try:
-                data = yf.download(ticker, start=startdate, end=enddate,
-                                   auto_adjust=False, progress=False)
-                if not data.empty:
-                    break
-            except Exception:
-                pass
-            time.sleep(1.5 * (_attempt + 1))   # back-off: 1.5s → 3s → 4.5s
+        data = yf.download(ticker, start=startdate, end=enddate,
+                           auto_adjust=False, progress=False)
         if data.empty:
             return None, f"Could not fetch data for {ticker}. Please check the ticker symbol."
         _col = data['Adj Close']
@@ -1128,7 +1171,7 @@ with c4:
     st.markdown(f"""
     <div class="metric-card metric-loss">
         <div class="metric-label">Worst Historical Loss</div>
-        <div class="metric-value">${worst_loss:,.0f}</div>
+        <div class="metric-value">{curr_sym}{worst_loss:,.0f}</div>
         <div class="metric-sub">{days}-day window</div>
     </div>""", unsafe_allow_html=True)
 
@@ -1165,9 +1208,9 @@ if method == "All (Compare)":
             <th>\u0394 vs Historical VaR</th>
         </tr></thead>
         <tbody>
-            <tr><td>Historical Simulation</td><td>${hist_VaR:,.2f}</td><td>${hist_ES:,.2f}</td><td>\u2014 baseline</td></tr>
-            <tr><td>Parametric (Normal)</td><td>${param_VaR:,.2f}</td><td>${param_ES:,.2f}</td><td>{((param_VaR - hist_VaR)/hist_VaR*100):+.1f}%</td></tr>
-            <tr><td>Monte Carlo (10,000 sims)</td><td>${mc_VaR:,.2f}</td><td>${mc_ES:,.2f}</td><td>{((mc_VaR - hist_VaR)/hist_VaR*100):+.1f}%</td></tr>
+            <tr><td>Historical Simulation</td><td>{curr_sym}{hist_VaR:,.2f}</td><td>{curr_sym}{hist_ES:,.2f}</td><td>\u2014 baseline</td></tr>
+            <tr><td>Parametric (Normal)</td><td>{curr_sym}{param_VaR:,.2f}</td><td>{curr_sym}{param_ES:,.2f}</td><td>{((param_VaR - hist_VaR)/hist_VaR*100):+.1f}%</td></tr>
+            <tr><td>Monte Carlo (10,000 sims)</td><td>{curr_sym}{mc_VaR:,.2f}</td><td>{curr_sym}{mc_ES:,.2f}</td><td>{((mc_VaR - hist_VaR)/hist_VaR*100):+.1f}%</td></tr>
         </tbody>
     </table>
     """, unsafe_allow_html=True)
@@ -1237,11 +1280,11 @@ else:
     tab1 = tab2 = tab3 = None
 
 def render_hist(container):
-    fig_h = build_risk_chart(
+    fig_h = build_risk_chart(curr_sym=curr_sym, 
         title=f"Historical Simulation  ·  {days}-Day Horizon  ·  {confidence_pct}% Confidence",
         x_data=range_returns_dollar.values,
         var_val=hist_VaR, es_val=hist_ES,
-        x_label=f"{days}-Day Portfolio P&L ($)",
+        x_label=f"{days}-Day Portfolio P&L ({curr_sym})",
         kde_overlay=True, normal_curve=False, **chart_kwargs,
     )
     container.markdown('<div class="chart-card">', unsafe_allow_html=True)
@@ -1249,7 +1292,7 @@ def render_hist(container):
     container.markdown('</div>', unsafe_allow_html=True)
 
 def render_param(container):
-    fig_p = build_risk_chart(
+    fig_p = build_risk_chart(curr_sym=curr_sym, 
         title=f"Parametric (Normal)  ·  {days}-Day Horizon  ·  {confidence_pct}% Confidence",
         x_data=range_returns_dollar.values,
         var_val=param_VaR, es_val=param_ES,
@@ -1261,11 +1304,11 @@ def render_param(container):
     container.markdown('</div>', unsafe_allow_html=True)
 
 def render_mc(container):
-    fig_mc = build_risk_chart(
+    fig_mc = build_risk_chart(curr_sym=curr_sym, 
         title=f"Monte Carlo (10,000 sims)  ·  {days}-Day Horizon  ·  {confidence_pct}% Confidence",
         x_data=mc_scenarios,
         var_val=mc_VaR, es_val=mc_ES,
-        x_label="Simulated Gain / Loss ($)",
+        x_label=f"Simulated Gain / Loss ({curr_sym})",
         kde_overlay=True, normal_curve=False, **chart_kwargs,
     )
     container.markdown('<div class="chart-card">', unsafe_allow_html=True)
@@ -1297,9 +1340,9 @@ annualised_var = interp_var * np.sqrt(252 / days)
 tail_risk_label = "elevated" if es_var_ratio > 1.5 else "moderate" if es_var_ratio > 1.2 else "contained"
 
 # ── Interpretation — updates automatically per selected method ──────────────
-with st.expander("INTERPRETATION", expanded=False):
+with st.expander("📖  INTERPRETATION", expanded=False):
 
-    _ann = f"~${annualised_var:,.0f}"
+    _ann = f"~{curr_sym}{annualised_var:,.0f}"
 
     _method_cfg = {
         "Historical":    ("#C0392B", "HISTORICAL SIMULATION",
@@ -1320,9 +1363,9 @@ with st.expander("INTERPRETATION", expanded=False):
     # core paragraph — use <strong> not ** (rendered inside raw HTML)
     _para = (
         f"At <strong>{confidence_pct}% confidence</strong>, over a <strong>{days}-day horizon</strong>, "
-        f"this portfolio's maximum expected loss is <strong>${interp_var:,.0f}</strong> "
+        f"this portfolio's maximum expected loss is <strong>{curr_sym}{interp_var:,.0f}</strong> "
         f"({interp_var / portfolio_value * 100:.2f}% of portfolio value). "
-        f"When that threshold is breached, the average loss is <strong>${interp_es:,.0f}</strong> "
+        f"When that threshold is breached, the average loss is <strong>{curr_sym}{interp_es:,.0f}</strong> "
         f"— an ES/VaR ratio of <strong>{es_var_ratio:.2f}×</strong> ({tail_risk_label} tail risk)."
     )
 
@@ -1339,7 +1382,7 @@ with st.expander("INTERPRETATION", expanded=False):
                   if param_VaR > hist_VaR else
                   "actual returns carry fatter tails than the normal distribution assumes")
         _para += (
-            f" Parametric VaR (<strong>${param_VaR:,.0f}</strong>) {_cmp_p} Historical (<strong>${hist_VaR:,.0f}</strong>)"
+            f" Parametric VaR (<strong>{curr_sym}{param_VaR:,.0f}</strong>) {_cmp_p} Historical (<strong>{curr_sym}{hist_VaR:,.0f}</strong>)"
             f" — {_why_p}."
         )
     elif method == "Monte Carlo":
@@ -1348,7 +1391,7 @@ with st.expander("INTERPRETATION", expanded=False):
                    if mc_VaR > hist_VaR else
                    "history contains extreme events simulations under-represent")
         _para += (
-            f" Monte Carlo VaR (<strong>${mc_VaR:,.0f}</strong>) {_cmp_mc} Historical (<strong>${hist_VaR:,.0f}</strong>)"
+            f" Monte Carlo VaR (<strong>{curr_sym}{mc_VaR:,.0f}</strong>) {_cmp_mc} Historical (<strong>{curr_sym}{hist_VaR:,.0f}</strong>)"
             f" — {_why_mc}."
         )
     elif method == "All (Compare)":
@@ -1359,9 +1402,9 @@ with st.expander("INTERPRETATION", expanded=False):
         _wp  = ("normal distribution inflates the tail"
                 if param_VaR > hist_VaR else "actual returns carry fatter tails than normal assumes")
         _para += (
-            f" Monte Carlo (<strong>${mc_VaR:,.0f}</strong>) is {_dmc} than"
-            f" Historical (<strong>${hist_VaR:,.0f}</strong>) — {_wmc}."
-            f" Parametric (<strong>${param_VaR:,.0f}</strong>) is {_dp} than Historical — {_wp}."
+            f" Monte Carlo (<strong>{curr_sym}{mc_VaR:,.0f}</strong>) is {_dmc} than"
+            f" Historical (<strong>{curr_sym}{hist_VaR:,.0f}</strong>) — {_wmc}."
+            f" Parametric (<strong>{curr_sym}{param_VaR:,.0f}</strong>) is {_dp} than Historical — {_wp}."
         )
 
     st.markdown(
@@ -1375,7 +1418,7 @@ with st.expander("INTERPRETATION", expanded=False):
                  letter-spacing:0.16em;color:{_col};font-weight:700;">{_lbl}</span>
     <span style="font-family:Space Mono,monospace;font-size:0.56rem;
                  color:#BBBBBB;margin-left:auto;">
-      {confidence_pct}%&nbsp;&nbsp;·&nbsp;&nbsp;{days}D&nbsp;&nbsp;·&nbsp;&nbsp;${portfolio_value:,.0f}</span>
+      {confidence_pct}%&nbsp;&nbsp;·&nbsp;&nbsp;{days}D&nbsp;&nbsp;·&nbsp;&nbsp;{curr_sym}{portfolio_value:,.0f}</span>
   </div>
 
   <div style="padding:10px 20px 0 20px;">
@@ -1394,13 +1437,13 @@ with st.expander("INTERPRETATION", expanded=False):
       <p style="font-family:Space Mono,monospace;font-size:0.47rem;letter-spacing:0.12em;
                 color:#BBBBBB;text-transform:uppercase;margin:0 0 5px 0;">{days}D VaR ({confidence_pct}%)</p>
       <p style="font-family:Space Mono,monospace;font-size:1.0rem;
-                font-weight:700;color:#C0392B;margin:0;">${interp_var:,.0f}</p>
+                font-weight:700;color:#C0392B;margin:0;">{curr_sym}{interp_var:,.0f}</p>
     </div>
     <div style="padding:12px 20px;border-right:1px solid #ECEAE4;">
       <p style="font-family:Space Mono,monospace;font-size:0.47rem;letter-spacing:0.12em;
                 color:#BBBBBB;text-transform:uppercase;margin:0 0 5px 0;">{days}D ES ({confidence_pct}%)</p>
       <p style="font-family:Space Mono,monospace;font-size:1.0rem;
-                font-weight:700;color:#7B241C;margin:0;">${interp_es:,.0f}</p>
+                font-weight:700;color:#7B241C;margin:0;">{curr_sym}{interp_es:,.0f}</p>
     </div>
     <div style="padding:12px 20px;border-right:1px solid #ECEAE4;">
       <p style="font-family:Space Mono,monospace;font-size:0.47rem;letter-spacing:0.12em;
@@ -1451,19 +1494,8 @@ def compute_sensitivity_matrix(tickers_tuple, weights_tuple, portfolio_value,
     startdate = enddate - dt.timedelta(days=365 * max_lookback + 30)
     frames = {}
     for ticker in tickers_tuple:
-        data = pd.DataFrame()
-        for _attempt in range(3):
-            try:
-                data = yf.download(ticker, start=startdate, end=enddate,
-                                   auto_adjust=False, progress=False)
-                if not data.empty:
-                    break
-            except Exception:
-                pass
-            time.sleep(1.5 * (_attempt + 1))
-        if data.empty:
-            frames[ticker] = pd.Series(dtype=float)
-            continue
+        data = yf.download(ticker, start=startdate, end=enddate,
+                           auto_adjust=False, progress=False)
         col = data["Adj Close"]
         if isinstance(col, pd.DataFrame):
             col = col.iloc[:, 0]
@@ -1687,7 +1719,7 @@ if _any_active:
                     f'font-family:Space Mono,monospace;font-size:0.60rem;color:#555;' +
                     f'padding:4px 10px;margin-right:8px;letter-spacing:0.06em;">' +
                     f'<b style="color:{port_color(_p["name"])}">{_p["name"]}</b>' +
-                    f' &nbsp;·&nbsp; {_alloc} &nbsp;·&nbsp; ${_parsed["value"]:,.0f}</span>'
+                    f' &nbsp;·&nbsp; {_alloc} &nbsp;·&nbsp; {curr_sym}{_parsed["value"]:,.0f}</span>'
                 )
     st.markdown(
         '<div style="margin-bottom:14px;">' + ''.join(_chips) + '</div>',
@@ -1747,7 +1779,7 @@ avg_ratio= np.mean([all_sa_results[port_names[0]][k]["ES"] / all_sa_results[port
 
 c1,c2,c3,c4 = st.columns(4)
 cards = [
-    (c1,"metric-var",  "Stress VaR (99%,20D,5Y)", f"${p_a['stress_var']:,.0f}", "worst-case scenario"),
+    (c1,"metric-var",  "Stress VaR (99%,20D,5Y)", f"{curr_sym}{p_a['stress_var']:,.0f}", "worst-case scenario"),
     (c2,"metric-es",   "Avg ES/VaR Ratio",          f"{avg_ratio:.2f}×",         "tail severity"),
     (c3,"metric-vol",  "Tail Amplification",         f"{p_a['tail_amp']:.2f}×",   "99% vs 90% VaR"),
     (c4,"metric-loss", "Regime Sensitivity",         f"{p_a['regime_sens']:.1f}%","std / mean across lookbacks"),
@@ -1826,7 +1858,7 @@ for tab, lb in zip(lb_tabs, SA_LOOKBACKS):
 
         tab.markdown("<br>", unsafe_allow_html=True)
         with tab.expander(
-            f"SENSITIVITY INTERPRETATION  —  {lb}Y LOOKBACK",
+            f"📊  SENSITIVITY INTERPRETATION  —  {lb}Y LOOKBACK",
             expanded=False,
         ):
             tab.markdown(
@@ -1845,8 +1877,8 @@ for tab, lb in zip(lb_tabs, SA_LOOKBACKS):
   <div style="padding:16px 20px 18px 20px;">
     <p style="font-family:Inter,sans-serif;font-size:0.875rem;color:#1a1a1a;line-height:1.9;margin:0;">
       Over the <strong>{lb}Y window</strong>, worst-case stress VaR
-      (99% confidence, 20-day) is <strong>${stress_var:,.0f}</strong>
-      — <strong>{scale_x:.1f}×</strong> the base VaR (90%, 1-day, ${base_var:,.0f}).
+      (99% confidence, 20-day) is <strong>{curr_sym}{stress_var:,.0f}</strong>
+      — <strong>{scale_x:.1f}×</strong> the base VaR (90%, 1-day, {curr_sym}{base_var:,.0f}).
       Tail amplification of <strong>{ta:.2f}×</strong> signals <em>{_ta_l}</em>:
       losses deteriorate sharply as confidence increases.
       Regime sensitivity of <strong>{rs:.1f}%</strong> is {_rs_l} — {_rs_n}.
@@ -1859,7 +1891,7 @@ for tab, lb in zip(lb_tabs, SA_LOOKBACKS):
       <p style="font-family:Space Mono,monospace;font-size:0.47rem;letter-spacing:0.12em;
                 color:#BBBBBB;text-transform:uppercase;margin:0 0 5px 0;">Stress VaR (99%,20D)</p>
       <p style="font-family:Space Mono,monospace;font-size:0.95rem;
-                font-weight:700;color:#C0392B;margin:0;">${stress_var:,.0f}</p>
+                font-weight:700;color:#C0392B;margin:0;">{curr_sym}{stress_var:,.0f}</p>
     </div>
     <div style="padding:12px 20px;border-right:1px solid #ECEAE4;">
       <p style="font-family:Space Mono,monospace;font-size:0.47rem;letter-spacing:0.12em;
@@ -2193,7 +2225,7 @@ with comp_tab:
 
         st.markdown("<br>", unsafe_allow_html=True)
         with st.expander(
-            f"AUTOMATED DIAGNOSTIC INSIGHTS  —  {lb_sel}Y LOOKBACK",
+            f"📋  AUTOMATED DIAGNOSTIC INSIGHTS  —  {lb_sel}Y LOOKBACK",
             expanded=False,
         ):
             st.markdown(
@@ -2250,10 +2282,10 @@ _worst_dd = float(_max_dd_dollar.max())
 # ── Summary cards ────────────────────────────────────────────────────────────
 _dd_c1, _dd_c2, _dd_c3, _dd_c4 = st.columns(4)
 for _col_dd, _lbl_dd, _val_dd, _sub_dd, _cls_dd in [
-    (_dd_c1, "Median Max Drawdown",   f"${_pct50_dd:,.0f}", "50th percentile",      "metric-var"),
-    (_dd_c2, "Expected Max Drawdown", f"${_mean_dd:,.0f}",  "mean across 10,000 paths","metric-es"),
-    (_dd_c3, "95th Pctl Drawdown",    f"${_pct95_dd:,.0f}", "severe scenario",       "metric-vol"),
-    (_dd_c4, "Worst Simulated DD",    f"${_worst_dd:,.0f}", "single worst path",     "metric-loss"),
+    (_dd_c1, "Median Max Drawdown",   f"{curr_sym}{_pct50_dd:,.0f}", "50th percentile",      "metric-var"),
+    (_dd_c2, "Expected Max Drawdown", f"{curr_sym}{_mean_dd:,.0f}",  "mean across 10,000 paths","metric-es"),
+    (_dd_c3, "95th Pctl Drawdown",    f"{curr_sym}{_pct95_dd:,.0f}", "severe scenario",       "metric-vol"),
+    (_dd_c4, "Worst Simulated DD",    f"{curr_sym}{_worst_dd:,.0f}", "single worst path",     "metric-loss"),
 ]:
     with _col_dd:
         st.markdown(f'''
@@ -2283,7 +2315,7 @@ with _dd_col_chart:
         marker_color="rgba(192,57,43,0.55)",
         marker_line_color="rgba(192,57,43,0.9)",
         marker_line_width=0.4,
-        hovertemplate="Drawdown: $%{x:,.0f}<br>Count: %{y}<extra></extra>",
+        hovertemplate=f"Drawdown: {curr_sym}%{{x:,.0f}}<br>Count: %{{y}}<extra></extra>",
     ))
 
     # Percentile lines
@@ -2307,7 +2339,7 @@ with _dd_col_chart:
             title=dict(text=f"Max Drawdown ($) over {days}-Day Path",
                        font=dict(size=11, color="#888", family="Space Mono, monospace")),
             showgrid=False, linecolor="#D6D2CA",
-            tickformat="$,.0f",
+            tickformat=f"{curr_sym},.0f",
             tickfont=dict(size=10, family="Space Mono, monospace", color="#666"),
         ),
         yaxis=dict(
@@ -2377,14 +2409,14 @@ with _dd_col_paths:
         mode="lines",
         name="Median",
         line=dict(color="#1a1a1a", width=2.5),
-        hovertemplate="Day %{x}  |  $%{y:,.0f}<extra>Median</extra>",
+        hovertemplate=f"Day %{{x}}  |  {curr_sym}%{{y:,.0f}}<extra>Median</extra>",
     ))
 
     # VaR threshold line — dashed red
     _path_fig.add_hline(
         y=-mc_VaR,
         line_color="#C0392B", line_width=1.5, line_dash="dash",
-        annotation_text=f"VaR ({confidence_pct}%)  −${mc_VaR:,.0f}",
+        annotation_text=f"VaR ({confidence_pct}%)  −{curr_sym}{mc_VaR:,.0f}",
         annotation_font=dict(size=9, family="Space Mono, monospace", color="#C0392B"),
         annotation_position="bottom right",
     )
@@ -2435,7 +2467,7 @@ with _dd_col_paths:
     st.plotly_chart(_path_fig, use_container_width=True)
 
 # ── Drawdown interpretation ───────────────────────────────────────────────────
-with st.expander("DRAWDOWN INTERPRETATION", expanded=False):
+with st.expander("📉  DRAWDOWN INTERPRETATION", expanded=False):
     _dd_ratio = _pct95_dd / hist_VaR if hist_VaR > 0 else 0
     _dd_severity = ("severe" if _dd_ratio > 3 else "moderate" if _dd_ratio > 1.5 else "contained")
     st.markdown(f'''
@@ -2443,10 +2475,10 @@ with st.expander("DRAWDOWN INTERPRETATION", expanded=False):
   <div style="padding:16px 20px 18px 20px;">
     <p style="font-family:Inter,sans-serif;font-size:0.875rem;color:#1a1a1a;line-height:1.9;margin:0;">
       Across 10,000 simulated <strong>{days}-day paths</strong>, the median maximum drawdown is
-      <strong>${_pct50_dd:,.0f}</strong> and the 95th-percentile drawdown reaches
-      <strong>${_pct95_dd:,.0f}</strong> — <strong>{_dd_ratio:.1f}×</strong> the {days}-day
-      Historical VaR (${hist_VaR:,.0f}), indicating <strong>{_dd_severity}</strong> drawdown risk.
-      The worst single simulated path lost <strong>${_worst_dd:,.0f}</strong>.
+      <strong>{curr_sym}{_pct50_dd:,.0f}</strong> and the 95th-percentile drawdown reaches
+      <strong>{curr_sym}{_pct95_dd:,.0f}</strong> — <strong>{_dd_ratio:.1f}×</strong> the {days}-day
+      Historical VaR ({curr_sym}{hist_VaR:,.0f}), indicating <strong>{_dd_severity}</strong> drawdown risk.
+      The worst single simulated path lost <strong>{curr_sym}{_worst_dd:,.0f}</strong>.
       Drawdown measures peak-to-trough loss within the path, capturing risk that VaR (a single-point
       loss estimate) cannot: a portfolio can stay within its VaR on any given day yet suffer
       a sustained drawdown over the holding period.
