@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import datetime as dt
+import time
 from scipy.stats import norm, gaussian_kde
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
