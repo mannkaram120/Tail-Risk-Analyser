@@ -7,22 +7,10 @@ from scipy.stats import norm, gaussian_kde
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os
-import time
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv()  # loads .env file from project directory automatically
 except ImportError:
-    pass
-
-# ── Render / datacenter IP fix ─────────────────────────────────────────────────
-# yFinance 1.2.0 uses curl_cffi internally — force it to use a browser fingerprint
-# so Yahoo Finance doesn't block datacenter IPs (Render, Railway, Heroku etc.)
-try:
-    from curl_cffi import requests as cffi_requests
-    _YF_SESSION = cffi_requests.Session(impersonate="chrome110")
-    yf.set_config(session=_YF_SESSION)
-except Exception:
-    # curl_cffi not available or set_config unsupported — fall back silently
     pass
 
 # ── Currency detection ─────────────────────────────────────────────────────────
@@ -31,17 +19,78 @@ def detect_currency(tickers):
     Returns (symbol, label, is_mixed) based on ticker suffixes.
     - All .NS / .BO  → INR  ₹
     - All no suffix  → USD  $
-    - Mixed          → MIXED warning
+    - Mixed          → USD  $ (INR returns auto-converted via USD/INR FX rate)
     """
     if not tickers:
         return "$", "USD", False
     indian  = [t for t in tickers if t.upper().endswith(".NS") or t.upper().endswith(".BO")]
     foreign = [t for t in tickers if not (t.upper().endswith(".NS") or t.upper().endswith(".BO"))]
     if indian and foreign:
-        return "$", "MIXED", True      # mixed — flag it
+        return "$", "MIXED", False     # mixed but converted — no warning
     if indian and not foreign:
         return "₹", "INR", False
     return "$", "USD", False
+
+def is_indian_ticker(ticker):
+    return ticker.upper().endswith(".NS") or ticker.upper().endswith(".BO")
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def fetch_usd_inr_rate():
+    """
+    Fetch the latest USD/INR spot rate (INR per 1 USD).
+    Returns float, e.g. 83.5. Falls back to 83.0 if fetch fails.
+    """
+    try:
+        end   = dt.datetime.now()
+        start = end - dt.timedelta(days=5)
+        try:
+            data = yf.download("INR=X", start=start, end=end,
+                               auto_adjust=True, progress=False,
+                               multi_level_index=False)
+        except TypeError:
+            data = yf.download("INR=X", start=start, end=end,
+                               auto_adjust=True, progress=False)
+        if data is not None and not data.empty:
+            col = data["Close"] if "Close" in data.columns else data.iloc[:, 0]
+            if isinstance(col, pd.DataFrame):
+                col = col.iloc[:, 0]
+            rate = float(col.dropna().iloc[-1])
+            return rate
+    except Exception:
+        pass
+    return 83.0   # safe fallback
+
+def fetch_price_series(ticker, startdate, enddate):
+    """Fetch close price series for a single ticker. Returns pd.Series or None."""
+    data = None
+    for _attempt in range(3):
+        try:
+            try:
+                data = yf.download(ticker, start=startdate, end=enddate,
+                                   auto_adjust=True, progress=False,
+                                   multi_level_index=False)
+            except TypeError:
+                data = yf.download(ticker, start=startdate, end=enddate,
+                                   auto_adjust=True, progress=False)
+            if data is not None and not data.empty:
+                break
+        except Exception:
+            pass
+        time.sleep(2 * (_attempt + 1))
+    if data is None or data.empty:
+        return None
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = data.columns.droplevel(1)
+    col = None
+    for c in ["Close", "Adj Close"]:
+        if c in data.columns:
+            col = data[c]
+            break
+    if col is None:
+        return None
+    if isinstance(col, pd.DataFrame):
+        col = col.iloc[:, 0]
+    return col
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -537,6 +586,8 @@ hr { border:none; border-top:1px solid #D4CFC4; margin:1.2rem 0; }
 # ── Session state ──────────────────────────────────────────────────────────────
 if "tickers" not in st.session_state:
     st.session_state.tickers = ["SPY", "BND", "GLD", "QQQ"]
+if "_ticker_input_key" not in st.session_state:
+    st.session_state["_ticker_input_key"] = 0
 
 QUICK_ADD = ["SPY", "QQQ", "BND", "GLD", "AAPL", "MSFT", "AMZN", "TSLA", "NVDA", "JPM", "META", "BRK-B"]
 
@@ -773,6 +824,21 @@ with st.sidebar:
 
         n_tickers = len(st.session_state.tickers)
         default_w = round(100.0 / n_tickers, 1) if n_tickers > 0 else 100.0
+
+        # Apply any pending rebalance before widgets are created
+        if "_pending_weights" in st.session_state:
+            _pw = st.session_state["_pending_weights"]
+            _tks = list(_pw.keys())
+            _running = 0.0
+            for _i, _t in enumerate(_tks):
+                if _i < len(_tks) - 1:
+                    _w = round(100.0 / len(_tks), 1)
+                    _running += _w
+                else:
+                    _w = round(100.0 - _running, 1)  # last ticker gets remainder
+                st.session_state[f"_w_{_t}"] = _w
+            del st.session_state["_pending_weights"]
+
         raw_weights = {}
 
         for t in list(st.session_state.tickers):
@@ -784,14 +850,20 @@ with st.sidebar:
                     unsafe_allow_html=True
                 )
             with col_w:
+                _init_w = st.session_state.pop(f"_w_{t}", default_w)
                 raw_weights[t] = st.number_input(
                     f"w_{t}", min_value=0.0, max_value=100.0,
-                    value=default_w, step=0.5, format="%.1f",
+                    value=_init_w, step=0.5, format="%.1f",
                     key=f"weight_{t}", label_visibility="collapsed",
                 )
             with col_x:
                 if st.button("×", key=f"remove_{t}"):
                     st.session_state.tickers.remove(t)
+                    # Auto-rebalance remaining tickers equally
+                    n = len(st.session_state.tickers)
+                    if n > 0:
+                        eq_w = round(100.0 / n, 1)
+                        st.session_state["_pending_weights"] = {_t: eq_w for _t in st.session_state.tickers}
                     st.rerun()
 
         # Total allocation
@@ -808,12 +880,18 @@ with st.sidebar:
 
         new_ticker = st.text_input(
             "Add Ticker", value="", placeholder="e.g. TSLA  →  enter",
-            key="ticker_input", label_visibility="collapsed",
+            key=f"ticker_input_{st.session_state['_ticker_input_key']}",
+            label_visibility="collapsed",
         )
         if new_ticker:
             t = new_ticker.strip().upper()
             if t and t not in st.session_state.tickers:
                 st.session_state.tickers.append(t)
+                n = len(st.session_state.tickers)
+                eq_w = round(100.0 / n, 1)
+                st.session_state["_pending_weights"] = {_t: eq_w for _t in st.session_state.tickers}
+            # Increment key to force a fresh empty text input on next render
+            st.session_state["_ticker_input_key"] += 1
             st.rerun()
 
         qa_label = "QUICK ADD +" if not st.session_state.show_quick_add else "QUICK ADD −"
@@ -826,6 +904,9 @@ with st.sidebar:
                 if cols[i % 4].button(qt, key=f"qa_{qt}"):
                     if qt not in st.session_state.tickers:
                         st.session_state.tickers.append(qt)
+                        n = len(st.session_state.tickers)
+                        eq_w = round(100.0 / n, 1)
+                        st.session_state["_pending_weights"] = {_t: eq_w for _t in st.session_state.tickers}
                     st.rerun()
     else:
         # placeholder so variables exist
@@ -843,13 +924,13 @@ with st.sidebar:
         if _curr_mixed:
             st.markdown(
                 "<div style='font-family:Space Mono,monospace;font-size:0.60rem;"
-                "color:#C0392B;background:#FDF0EE;border:1px solid #F5C6C0;"
+                "color:#2E7D32;background:#F1F8F1;border:1px solid #C8E6C9;"
                 "padding:8px 10px;margin-bottom:8px;letter-spacing:0.06em;'>"
-                "⚠ MIXED CURRENCIES DETECTED<br>"
+                "✓ MIXED PORTFOLIO<br>"
                 "<span style='color:#888;font-size:0.55rem;'>"
-                "Indian (.NS/.BO) and non-Indian tickers cannot be combined — "
-                "INR and USD returns are not directly comparable. "
-                "Use separate portfolios for accurate results.</span></div>",
+                "Indian (.NS/.BO) returns are automatically converted to USD "
+                "using live USD/INR FX rates. All risk metrics shown in USD ($)."
+                "</span></div>",
                 unsafe_allow_html=True
             )
         portfolio_value = st.number_input(
@@ -913,7 +994,7 @@ with st.sidebar:
         method         = "All (Compare)"
 
     # ══ BENCHMARK PORTFOLIOS ═════════════════════════════════════════════════════
-    st.markdown('<div class="sb-section" style="margin-top:22px;">BENCHMARKS</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sb-section" style="margin-top:22px;">COMPARE</div>', unsafe_allow_html=True)
 
     # ── Canonical benchmark presets ───────────────────────────────────────────
     BENCH_PRESETS = [
@@ -945,6 +1026,24 @@ with st.sidebar:
                           ("value",   f"sb_value_{_si}"),   ("enabled", f"sb_en_{_si}")]:
             if _sk in st.session_state:
                 st.session_state.sa_portfolios[_si][_sf] = st.session_state[_sk]
+
+        # Auto-update name when tickers are manually edited
+        # Check if current tickers match a preset — if not, derive name from tickers
+        _current_tickers = st.session_state.sa_portfolios[_si]["tickers"].strip()
+        _preset_match = next(
+            (_bp["name"] for _bp in BENCH_PRESETS
+             if _bp["tickers"].replace(" ", "").upper() ==
+                _current_tickers.replace(" ", "").upper()),
+            None
+        )
+        if _preset_match:
+            # Tickers match a preset exactly — use preset name
+            st.session_state.sa_portfolios[_si]["name"] = _preset_match
+        else:
+            # Custom tickers — derive name from the tickers themselves
+            _ticker_parts = [t.strip().upper() for t in _current_tickers.split(",") if t.strip()]
+            if _ticker_parts:
+                st.session_state.sa_portfolios[_si]["name"] = " + ".join(_ticker_parts)
 
     # ── Preset pill buttons: render as styled HTML links via st.markdown + st.button ──
     # Two rows of pills: row 1 = SPY QQQ DIA, row 2 = BND 60/40
@@ -1063,42 +1162,47 @@ if abs(total_w - 100.0) > 0.11:
 
 @st.cache_data(show_spinner=False, ttl=3600)
 def load_market_data(tickers_tuple, lookback_years, days):
-    """Fetch and process market data. Cached for 1 hour to avoid redundant API calls."""
+    """
+    Fetch and process market data. Cached for 1 hour.
+    For mixed INR/USD portfolios, Indian stock returns are converted to USD
+    using the USD/INR FX rate (log returns additive: r_usd = r_inr - r_fx).
+    """
     enddate   = dt.datetime.now()
     startdate = enddate - dt.timedelta(days=365 * lookback_years)
+
+    indian_tickers  = [t for t in tickers_tuple if is_indian_ticker(t)]
+    foreign_tickers = [t for t in tickers_tuple if not is_indian_ticker(t)]
+    is_mixed        = bool(indian_tickers and foreign_tickers)
+
+    # Fetch USD/INR FX rate if mixed portfolio
+    fx_log_returns = None
+    if is_mixed:
+        fx_series = fetch_price_series("INR=X", startdate, enddate)
+        if fx_series is None:
+            return None, "Could not fetch USD/INR FX rate. Please try again."
+        fx_log_returns = np.log(fx_series / fx_series.shift(1)).dropna()
+
     adj_close_df = pd.DataFrame()
     for ticker in tickers_tuple:
-        data = None
-        for _attempt in range(3):
-            try:
-                try:
-                    data = yf.download(ticker, start=startdate, end=enddate,
-                                       auto_adjust=True, progress=False,
-                                       multi_level_index=False)
-                except TypeError:
-                    data = yf.download(ticker, start=startdate, end=enddate,
-                                       auto_adjust=True, progress=False)
-                if data is not None and not data.empty:
-                    break
-            except Exception:
-                pass
-            time.sleep(2 * (_attempt + 1))
-        if data is None or data.empty:
+        _col = fetch_price_series(ticker, startdate, enddate)
+        if _col is None:
             return None, f"Could not fetch data for {ticker}. Please check the ticker symbol."
-        # Handle both flat and MultiIndex column structures
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = data.columns.droplevel(1)
-        if 'Close' in data.columns:
-            _col = data['Close']
-        elif 'Adj Close' in data.columns:
-            _col = data['Adj Close']
-        else:
-            return None, f"Could not fetch data for {ticker}. Please check the ticker symbol."
-        if isinstance(_col, pd.DataFrame):
-            _col = _col.iloc[:, 0]
         adj_close_df[ticker] = _col
-    log_returns      = np.log(adj_close_df / adj_close_df.shift(1)).dropna()
+
+    log_returns = np.log(adj_close_df / adj_close_df.shift(1)).dropna()
+
+    # Convert Indian ticker log-returns to USD: r_usd = r_inr - r_fx
+    # INR=X = INR per USD; rise means INR weakened, so USD value of INR asset falls
+    if is_mixed and fx_log_returns is not None:
+        common_idx  = log_returns.index.intersection(fx_log_returns.index)
+        log_returns = log_returns.loc[common_idx]
+        fx_aligned  = fx_log_returns.loc[common_idx]
+        for t in indian_tickers:
+            if t in log_returns.columns:
+                log_returns[t] = log_returns[t] - fx_aligned.values
+
     return log_returns, None
+
 
 
 enddate   = dt.datetime.now()
@@ -1519,44 +1623,55 @@ SA_LOOKBACKS  = [1, 3, 5]
 # ── Shared compute function ───────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def compute_sensitivity_matrix(tickers_tuple, weights_tuple, portfolio_value,
-                                SA_CONFIDENCE, SA_HORIZONS, SA_LOOKBACKS):
+                                SA_CONFIDENCE, SA_HORIZONS, SA_LOOKBACKS,
+                                fx_multiplier=1.0,
+                                convert_indian_to_usd=False):
+    """
+    fx_multiplier        : scale factor on all VaR/ES outputs.
+                           Pass live USD/INR rate when benchmark is USD but main is INR.
+    convert_indian_to_usd: when True, Indian ticker log-returns in this benchmark are
+                           converted to USD via r_usd = r_inr - r_fx.
+                           Used for gaps 1 & 2: USD/MIXED main portfolio + Indian benchmark.
+    """
     import yfinance as yf, datetime as dt
     results = {}
     max_lookback = max(SA_LOOKBACKS)
     enddate   = dt.datetime.now()
     startdate = enddate - dt.timedelta(days=365 * max_lookback + 30)
+
+    indian_tickers  = [t for t in tickers_tuple if is_indian_ticker(t)]
+    foreign_tickers = [t for t in tickers_tuple if not is_indian_ticker(t)]
+    is_mixed        = bool(indian_tickers and foreign_tickers)
+
+    # Fetch FX rate if: (a) mixed benchmark portfolio, OR (b) pure-Indian benchmark
+    # that needs to be expressed in USD (convert_indian_to_usd flag)
+    need_fx        = is_mixed or (bool(indian_tickers) and convert_indian_to_usd)
+    fx_log_returns = None
+    if need_fx:
+        fx_series = fetch_price_series("INR=X", startdate, enddate)
+        if fx_series is not None:
+            fx_log_returns = np.log(fx_series / fx_series.shift(1)).dropna()
+
     frames = {}
     for ticker in tickers_tuple:
-        data = None
-        for _attempt in range(3):
-            try:
-                try:
-                    data = yf.download(ticker, start=startdate, end=enddate,
-                                       auto_adjust=True, progress=False,
-                                       multi_level_index=False)
-                except TypeError:
-                    data = yf.download(ticker, start=startdate, end=enddate,
-                                       auto_adjust=True, progress=False)
-                if data is not None and not data.empty:
-                    break
-            except Exception:
-                pass
-            time.sleep(2 * (_attempt + 1))
-        if data is None or data.empty:
+        col = fetch_price_series(ticker, startdate, enddate)
+        if col is None:
             return {}
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = data.columns.droplevel(1)
-        if 'Close' in data.columns:
-            col = data['Close']
-        elif 'Adj Close' in data.columns:
-            col = data['Adj Close']
-        else:
-            return {}
-        if isinstance(col, pd.DataFrame):
-            col = col.iloc[:, 0]
         frames[ticker] = col
+
     adj_close_df = pd.DataFrame(frames).dropna()
     log_ret_full = np.log(adj_close_df / adj_close_df.shift(1)).dropna()
+
+    # Convert Indian returns → USD when needed
+    # Covers: (a) mixed benchmark, (b) pure-Indian benchmark in USD context
+    if (is_mixed or convert_indian_to_usd) and fx_log_returns is not None:
+        common_idx   = log_ret_full.index.intersection(fx_log_returns.index)
+        log_ret_full = log_ret_full.loc[common_idx]
+        fx_aligned   = fx_log_returns.loc[common_idx]
+        for t in indian_tickers:
+            if t in log_ret_full.columns:
+                log_ret_full[t] = log_ret_full[t] - fx_aligned.values
+
     weights_arr  = np.array(weights_tuple)
     for lb in SA_LOOKBACKS:
         cutoff = enddate - dt.timedelta(days=365 * lb)
@@ -1565,15 +1680,16 @@ def compute_sensitivity_matrix(tickers_tuple, weights_tuple, portfolio_value,
         for h in SA_HORIZONS:
             rr = port_r.rolling(window=h).sum().dropna()
             for c in SA_CONFIDENCE:
-                var_v = -np.percentile(rr, 100*(1-c/100)) * portfolio_value
-                losses = -rr * portfolio_value
+                var_v = -np.percentile(rr, 100*(1-c/100)) * portfolio_value * fx_multiplier
+                losses = -rr * portfolio_value * fx_multiplier
                 es_v  = float(losses[losses >= var_v].mean()) if (losses >= var_v).any() else var_v
                 results[(lb, h, c)] = {"VaR": float(var_v), "ES": float(es_v)}
     return results
 
 # ── Structural metrics per portfolio ─────────────────────────────────────────
 def compute_structural_metrics(res, sa_conf, sa_hor, sa_lb):
-    all_var     = [res[k]["VaR"] for k in res]
+    # Filter to only tuple keys — skip metadata keys like "__display_value__"
+    all_var     = [res[k]["VaR"] for k in res if isinstance(k, tuple)]
     stress_var  = res[(5, 20, 99)]["VaR"]
     base_var    = res[(1,  1, 90)]["VaR"]
     avg_var     = float(np.mean(all_var))
@@ -1783,11 +1899,11 @@ else:
     st.markdown(
         '<div style="font-family:Space Mono,monospace;font-size:0.65rem;color:#AAA;' +
         'letter-spacing:0.08em;margin-bottom:14px;">' +
-        'Enable benchmarks in the sidebar under <b style="color:#555;">BENCHMARKS</b> to compare.' +
+        'Enable benchmarks in the sidebar under <b style="color:#555;">COMPARE</b> to compare.' +
         '</div>',
         unsafe_allow_html=True)
 
-# ── Collect active portfolios ─────────────────────────────────────────────────# ── Collect active portfolios ─────────────────────────────────────────────────
+# ── Collect active portfolios ─────────────────────────────────────────────────
 active_portfolios = [{"name": "Portfolio A (Active)", "tickers": tickers,
                        "weights": weights.tolist(), "value": portfolio_value}]
 for p in st.session_state.sa_portfolios:
@@ -1795,6 +1911,49 @@ for p in st.session_state.sa_portfolios:
         parsed, err = parse_portfolio(p, portfolio_value)
         if parsed:
             active_portfolios.append(parsed)
+
+# ── FX conversion logic for benchmark portfolios ─────────────────────────────
+#
+# Four cases:
+#  A) Main=INR,  Benchmark=USD only  → fx_multiplier=USD/INR rate, convert_indian_to_usd=False
+#  B) Main=INR,  Benchmark=Indian    → fx_multiplier=1.0,           convert_indian_to_usd=False  (both ₹)
+#  C) Main=INR,  Benchmark=Mixed     → fx_multiplier=1.0,           convert_indian_to_usd=False  (mixed handled inside)
+#  D) Main=USD/MIXED, Benchmark=Indian or Mixed → fx_multiplier=1.0, convert_indian_to_usd=True  (INR→USD)
+#  E) Main=USD/MIXED, Benchmark=USD  → fx_multiplier=1.0,           convert_indian_to_usd=False  (both $)
+
+_usd_inr_rate = 1.0
+if _curr_label == "INR":
+    _usd_inr_rate = fetch_usd_inr_rate()
+
+def _bench_params(p_tickers):
+    """
+    Return (fx_multiplier, convert_indian_to_usd) for a benchmark portfolio.
+    """
+    has_indian  = any(is_indian_ticker(t) for t in p_tickers)
+    has_foreign = any(not is_indian_ticker(t) for t in p_tickers)
+    all_foreign = has_foreign and not has_indian
+
+    if _curr_label == "INR":
+        # Main portfolio is pure Indian (₹)
+        if all_foreign:
+            # Case A: benchmark is pure USD → scale to ₹
+            return _usd_inr_rate, False
+        else:
+            # Case B/C: benchmark is Indian or mixed → no scaling needed
+            return 1.0, False
+    else:
+        # Main portfolio is USD or MIXED ($)
+        if has_indian:
+            # Case D: benchmark has Indian tickers → convert them to USD
+            return 1.0, True
+        else:
+            # Case E: benchmark is pure USD → no conversion
+            return 1.0, False
+
+def _bench_display_value(p):
+    """Portfolio value in the main display currency (₹ for INR main, $ for USD/MIXED)."""
+    fx_mult, _ = _bench_params(p["tickers"])
+    return p["value"] * fx_mult
 
 # ── Compute matrices for all active portfolios ───────────────────────────────
 all_sa_results = {}
@@ -1804,11 +1963,16 @@ if run:
     # Full calculation triggered by user — compute and cache
     with st.spinner(f"Computing sensitivity matrix for {len(active_portfolios)} portfolio(s)..."):
         for p in active_portfolios:
+            _fx, _conv_ind = _bench_params(p["tickers"])
             res = compute_sensitivity_matrix(
                 tuple(p["tickers"]), tuple(p["weights"]), p["value"],
-                SA_CONFIDENCE, SA_HORIZONS, SA_LOOKBACKS
+                SA_CONFIDENCE, SA_HORIZONS, SA_LOOKBACKS,
+                fx_multiplier=_fx,
+                convert_indian_to_usd=_conv_ind,
             )
             all_sa_results[p["name"]] = res
+            # Store display_value so comparison table can show correct currency
+            all_sa_results[p["name"]]["__display_value__"] = _bench_display_value(p)
             all_sa_metrics[p["name"]] = compute_structural_metrics(res, SA_CONFIDENCE, SA_HORIZONS, SA_LOOKBACKS)
     # Persist to session state so slider reruns don't lose the data
     st.session_state["_cached_results"] = {
@@ -1822,15 +1986,20 @@ elif _has_cached:
     all_sa_results   = _cache["all_sa_results"]
     all_sa_metrics   = _cache["all_sa_metrics"]
     active_portfolios = _cache["active_portfolios"]
+    # Back-fill display_value if missing from older cache entries
+    for p in active_portfolios:
+        _rs = all_sa_results.get(p["name"], {})
+        if "__display_value__" not in _rs:
+            _rs["__display_value__"] = _bench_display_value(p)
 
 port_names = list(all_sa_results.keys())
 
 # ══ SUMMARY CARDS — Portfolio A ═══════════════════════════════════════════════
 p_a      = all_sa_metrics[port_names[0]]
-all_var  = [all_sa_results[port_names[0]][k]["VaR"] for k in all_sa_results[port_names[0]]]
-all_es   = [all_sa_results[port_names[0]][k]["ES"]  for k in all_sa_results[port_names[0]]]
+all_var  = [all_sa_results[port_names[0]][k]["VaR"] for k in all_sa_results[port_names[0]] if isinstance(k, tuple)]
+all_es   = [all_sa_results[port_names[0]][k]["ES"]  for k in all_sa_results[port_names[0]] if isinstance(k, tuple)]
 avg_ratio= np.mean([all_sa_results[port_names[0]][k]["ES"] / all_sa_results[port_names[0]][k]["VaR"]
-                    for k in all_sa_results[port_names[0]]])
+                    for k in all_sa_results[port_names[0]] if isinstance(k, tuple)])
 
 c1,c2,c3,c4 = st.columns(4)
 cards = [
@@ -2012,23 +2181,58 @@ with comp_tab:
         def to_pct(val, pval): return val / pval * 100 if pval > 0 else 0
 
         # Build normalised metrics dict: VaR as % of portfolio value
+        # NOTE: stress_var etc. are already FX-scaled (multiplied by fx_multiplier
+        # inside compute_sensitivity_matrix). So dividing by display_value (which
+        # is also FX-scaled) correctly cancels out and gives the true % ratio.
         norm_metrics = {}
         for pname in port_names:
-            m   = all_sa_metrics[pname]
-            pv  = next(p["value"] for p in active_portfolios if p["name"] == pname)
+            m    = all_sa_metrics[pname]
+            # display_value: portfolio value in main currency (₹ for INR main portfolio)
+            dv   = all_sa_results[pname].get("__display_value__",
+                   next(p["value"] for p in active_portfolios if p["name"] == pname))
             norm_metrics[pname] = {
-                "stress_var_pct": to_pct(m["stress_var"], pv),
-                "avg_var_pct":    to_pct(m["avg_var"],    pv),
-                "base_var_pct":   to_pct(m["base_var"],   pv),
-                "std_var_pct":    to_pct(m["std_var"],     pv),
+                "stress_var_pct": to_pct(m["stress_var"], dv),
+                "avg_var_pct":    to_pct(m["avg_var"],    dv),
+                "base_var_pct":   to_pct(m["base_var"],   dv),
+                "std_var_pct":    to_pct(m["std_var"],    dv),
                 "tail_amp":       m["tail_amp"],
                 "time_dev":       m["time_dev"],
                 "regime_sens":    m["regime_sens"],
                 "stress_range":   m["stress_range"],
-                "pval":           pv,
+                "pval":           dv,   # display value in main currency
             }
 
         # ── Section header ───────────────────────────────────────────────────────
+        # Show FX notice when currency conversion is active
+        _any_usd_to_inr = (_curr_label == "INR" and _usd_inr_rate != 1.0 and
+                           any(all(not is_indian_ticker(t) for t in p["tickers"])
+                               for p in active_portfolios[1:]))
+        _any_inr_to_usd = (_curr_label in ("USD", "MIXED") and
+                           any(any(is_indian_ticker(t) for t in p["tickers"])
+                               for p in active_portfolios[1:]))
+
+        if _any_usd_to_inr:
+            st.markdown(
+                f'<div style="background:#F1F8F1;border:1px solid #C8E6C9;'
+                f'font-family:Space Mono,monospace;font-size:0.60rem;color:#2E7D32;'
+                f'padding:8px 12px;margin-bottom:8px;letter-spacing:0.05em;">'
+                f'🔄 USD → INR CONVERSION ACTIVE &nbsp;·&nbsp; '
+                f'1 USD = ₹{_usd_inr_rate:,.2f} (live rate) &nbsp;·&nbsp; '
+                f'USD benchmark absolute figures converted to ₹. % metrics unaffected.'
+                f'</div>',
+                unsafe_allow_html=True)
+
+        if _any_inr_to_usd:
+            st.markdown(
+                f'<div style="background:#EFF4FB;border:1px solid #BBCFE8;'
+                f'font-family:Space Mono,monospace;font-size:0.60rem;color:#1A4F8A;'
+                f'padding:8px 12px;margin-bottom:8px;letter-spacing:0.05em;">'
+                f'🔄 INR → USD CONVERSION ACTIVE &nbsp;·&nbsp; '
+                f'Indian benchmark returns converted to USD via live FX (r_usd = r_inr − r_fx). '
+                f'% metrics unaffected.'
+                f'</div>',
+                unsafe_allow_html=True)
+
         st.markdown("""
         <div style="display:flex;align-items:baseline;gap:16px;margin-bottom:16px;
                     border-bottom:1px solid #E8E4DC;padding-bottom:12px;">
